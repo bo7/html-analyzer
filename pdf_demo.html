@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Generation Demo</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        
+        .button {
+            background-color: #4e73df;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 10px 2px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        
+        .chart-container {
+            width: 400px;
+            height: 300px;
+            margin: 20px auto;
+        }
+        
+        .report-data {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>HTML Analyzer PDF Report Demo</h1>
+    
+    <div class="report-data">
+        <h2>Analysis Results for: https://www.fh-wedel.de</h2>
+        <p><strong>Title:</strong> Die Fachhochschule Wedel bei Hamburg</p>
+        <p><strong>Number of tags:</strong> 1583</p>
+        <p><strong>Number of words:</strong> 2620</p>
+        <p><strong>Size in bytes:</strong> 143103</p>
+        <p><strong>Number of links:</strong> 233</p>
+        <p><strong>Number of images:</strong> 53</p>
+        <p><strong>Number of CSS files:</strong> 5</p>
+        <p><strong>Number of JavaScript files:</strong> 30</p>
+    </div>
+    
+    <div class="chart-container">
+        <canvas id="tagsChart"></canvas>
+    </div>
+    
+    <div class="chart-container">
+        <canvas id="filesChart"></canvas>
+    </div>
+    
+    <div style="text-align: center;">
+        <button class="button" onclick="generatePDF()">Generate PDF Report</button>
+    </div>
+    
+    <script>
+        // Sample report data
+        const reportData = {
+            url: 'https://www.fh-wedel.de',
+            title: 'Die Fachhochschule Wedel bei Hamburg',
+            tags: 1583,
+            words: 2620,
+            size: 143103,
+            links: 233,
+            images: 53,
+            css: 5,
+            js: 30
+        };
+        
+        // Create charts when the page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            createCharts();
+        });
+        
+        // Function to create charts
+        function createCharts() {
+            // Create tags distribution chart
+            const tagsCtx = document.getElementById('tagsChart').getContext('2d');
+            new Chart(tagsCtx, {
+                type: 'pie',
+                data: {
+                    labels: ['HTML Tags', 'Links', 'Images'],
+                    datasets: [{
+                        data: [reportData.tags, reportData.links, reportData.images],
+                        backgroundColor: [
+                            '#4e73df',
+                            '#1cc88a',
+                            '#36b9cc'
+                        ],
+                        borderColor: '#ffffff',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Element Distribution',
+                            color: '#333333',
+                            font: {
+                                size: 16
+                            }
+                        },
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+            
+            // Create files distribution chart
+            const filesCtx = document.getElementById('filesChart').getContext('2d');
+            new Chart(filesCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['CSS Files', 'JavaScript Files'],
+                    datasets: [{
+                        label: 'Number of Files',
+                        data: [reportData.css, reportData.js],
+                        backgroundColor: [
+                            '#f6c23e',
+                            '#e74a3b'
+                        ],
+                        borderColor: '#ffffff',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Resource Files',
+                            color: '#333333',
+                            font: {
+                                size: 16
+                            }
+                        },
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Function to generate enhanced PDF with tiles, charts and tables
+        async function generatePDF() {
+            try {
+                // Get chart canvases
+                const tagsChart = document.getElementById('tagsChart');
+                const filesChart = document.getElementById('filesChart');
+                
+                // Convert charts to images
+                const tagsChartImg = await html2canvas(tagsChart);
+                const filesChartImg = await html2canvas(filesChart);
+                
+                // Initialize jsPDF
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF({
+                    orientation: 'portrait',
+                    unit: 'mm',
+                    format: 'a4'
+                });
+                
+                // Define colors for the tiles
+                const colors = {
+                    primary: '#4e73df',
+                    success: '#1cc88a',
+                    info: '#36b9cc',
+                    warning: '#f6c23e',
+                    danger: '#e74a3b',
+                    secondary: '#858796',
+                    light: '#f8f9fc',
+                    dark: '#5a5c69'
+                };
+                
+                // Add header with logo-like element
+                doc.setFillColor(colors.dark);
+                doc.rect(0, 0, 210, 25, 'F');
+                doc.setTextColor(255, 255, 255);
+                doc.setFontSize(20);
+                doc.text('HTML ANALYZER', 105, 15, { align: 'center' });
+                
+                // Add report title
+                doc.setFillColor(colors.light);
+                doc.rect(0, 25, 210, 15, 'F');
+                doc.setTextColor(colors.dark);
+                doc.setFontSize(16);
+                doc.text('Analysis Report', 105, 35, { align: 'center' });
+                
+                // Add website info section
+                doc.setFillColor(255, 255, 255);
+                doc.rect(10, 45, 190, 20, 'F');
+                doc.setDrawColor(colors.primary);
+                doc.setLineWidth(0.5);
+                doc.rect(10, 45, 190, 20, 'S');
+                doc.setTextColor(colors.dark);
+                doc.setFontSize(12);
+                doc.text('Website:', 15, 53);
+                doc.setTextColor(colors.primary);
+                doc.text(reportData.url, 40, 53);
+                doc.setTextColor(colors.dark);
+                doc.text('Title:', 15, 60);
+                doc.setTextColor(colors.primary);
+                doc.text(reportData.title, 40, 60);
+                
+                // Add statistics tiles in a grid layout
+                const tileWidth = 90;
+                const tileHeight = 25;
+                const tilesPerRow = 2;
+                const tileMargin = 10;
+                const startY = 70;
+                
+                // Tile data
+                const tiles = [
+                    { label: 'HTML Tags', value: reportData.tags.toLocaleString(), color: colors.primary },
+                    { label: 'Words', value: reportData.words.toLocaleString(), color: colors.success },
+                    { label: 'Links', value: reportData.links.toLocaleString(), color: colors.info },
+                    { label: 'Images', value: reportData.images.toLocaleString(), color: colors.warning },
+                    { label: 'CSS Files', value: reportData.css.toLocaleString(), color: colors.danger },
+                    { label: 'JS Files', value: reportData.js.toLocaleString(), color: colors.secondary }
+                ];
+                
+                // Draw tiles
+                tiles.forEach((tile, index) => {
+                    const row = Math.floor(index / tilesPerRow);
+                    const col = index % tilesPerRow;
+                    const x = 10 + col * (tileWidth + tileMargin);
+                    const y = startY + row * (tileHeight + tileMargin);
+                    
+                    // Draw tile background
+                    doc.setFillColor(255, 255, 255);
+                    doc.rect(x, y, tileWidth, tileHeight, 'F');
+                    
+                    // Draw colored header
+                    doc.setFillColor(tile.color);
+                    doc.rect(x, y, tileWidth, 7, 'F');
+                    
+                    // Draw border
+                    doc.setDrawColor(tile.color);
+                    doc.setLineWidth(0.5);
+                    doc.rect(x, y, tileWidth, tileHeight, 'S');
+                    
+                    // Add label
+                    doc.setTextColor(255, 255, 255);
+                    doc.setFontSize(8);
+                    doc.text(tile.label, x + 5, y + 5);
+                    
+                    // Add value
+                    doc.setTextColor(colors.dark);
+                    doc.setFontSize(14);
+                    doc.text(tile.value, x + tileWidth / 2, y + 17, { align: 'center' });
+                });
+                
+                // Add size information in a special tile
+                const sizeY = startY + 3 * (tileHeight + tileMargin);
+                doc.setFillColor(255, 255, 255);
+                doc.rect(10, sizeY, 190, tileHeight, 'F');
+                doc.setDrawColor(colors.dark);
+                doc.setLineWidth(0.5);
+                doc.rect(10, sizeY, 190, tileHeight, 'S');
+                doc.setFillColor(colors.dark);
+                doc.rect(10, sizeY, 190, 7, 'F');
+                doc.setTextColor(255, 255, 255);
+                doc.setFontSize(8);
+                doc.text('Size Information', 15, sizeY + 5);
+                doc.setTextColor(colors.dark);
+                doc.setFontSize(12);
+                doc.text(`Total Size: ${(reportData.size / 1024).toFixed(1)} KB`, 105, sizeY + 17, { align: 'center' });
+                
+                // Add charts
+                const chartsY = sizeY + tileHeight + 15;
+                doc.addImage(tagsChartImg.toDataURL(), 'PNG', 10, chartsY, 90, 70);
+                doc.addImage(filesChartImg.toDataURL(), 'PNG', 110, chartsY, 90, 70);
+                
+                // Add table with detailed statistics
+                const tableY = chartsY + 80;
+                doc.setFillColor(colors.primary);
+                doc.rect(10, tableY, 190, 10, 'F');
+                doc.setTextColor(255, 255, 255);
+                doc.setFontSize(12);
+                doc.text('Detailed Statistics', 105, tableY + 7, { align: 'center' });
+                
+                // Table headers
+                const tableHeaders = ['Metric', 'Value', 'Percentage'];
+                const colWidths = [70, 60, 60];
+                doc.setFillColor(colors.light);
+                doc.rect(10, tableY + 10, 190, 8, 'F');
+                doc.setTextColor(colors.dark);
+                doc.setFontSize(10);
+                doc.text(tableHeaders[0], 15, tableY + 16);
+                doc.text(tableHeaders[1], 85, tableY + 16);
+                doc.text(tableHeaders[2], 145, tableY + 16);
+                
+                // Table rows
+                const tableData = [
+                    { metric: 'HTML Tags', value: reportData.tags, percentage: '100%' },
+                    { metric: 'Links', value: reportData.links, percentage: `${(reportData.links / reportData.tags * 100).toFixed(1)}%` },
+                    { metric: 'Images', value: reportData.images, percentage: `${(reportData.images / reportData.tags * 100).toFixed(1)}%` },
+                    { metric: 'CSS Files', value: reportData.css, percentage: `${(reportData.css / (reportData.css + reportData.js) * 100).toFixed(1)}%` },
+                    { metric: 'JS Files', value: reportData.js, percentage: `${(reportData.js / (reportData.css + reportData.js) * 100).toFixed(1)}%` }
+                ];
+                
+                tableData.forEach((row, index) => {
+                    const rowY = tableY + 18 + index * 8;
+                    if (index % 2 === 0) {
+                        doc.setFillColor(245, 245, 245);
+                        doc.rect(10, rowY, 190, 8, 'F');
+                    }
+                    doc.setTextColor(colors.dark);
+                    doc.setFontSize(9);
+                    doc.text(row.metric, 15, rowY + 6);
+                    doc.text(row.value.toString(), 85, rowY + 6);
+                    doc.text(row.percentage, 145, rowY + 6);
+                });
+                
+                // Add footer
+                doc.setFillColor(colors.dark);
+                doc.rect(0, 280, 210, 17, 'F');
+                doc.setTextColor(255, 255, 255);
+                doc.setFontSize(10);
+                doc.text('Generated by HTML Analyzer v1.0', 105, 287, { align: 'center' });
+                doc.setFontSize(8);
+                doc.text(`Date: ${new Date().toLocaleString()}`, 105, 293, { align: 'center' });
+                
+                // Save the PDF
+                doc.save("fh-wedel.de-report.pdf");
+                
+                alert("PDF generated and downloaded successfully!");
+            } catch (error) {
+                console.error("Error generating PDF:", error);
+                alert("Error generating PDF: " + error.message);
+            }
+        }
+    </script>
+</body>
+</html>
