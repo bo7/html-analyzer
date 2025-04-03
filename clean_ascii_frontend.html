@@ -105,8 +105,9 @@
     
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            console.log("DOM loaded, starting boot sequence...");
-            bootSequence();
+            console.log("DOM loaded, starting login screen...");
+            // Skip boot sequence and go straight to login screen
+            showLoginScreen();
         });
         
         const screen = document.getElementById('screen');
@@ -205,7 +206,7 @@
                 
                 if (event.key === 'Enter') {
                     // Check if license key is correct
-                    if (licenseKey.toLowerCase() === 'wedel') {
+                    if (licenseKey.toLowerCase() === 'wumpus') {
                         // Stop animation and remove key handler
                         clearInterval(animationInterval);
                         document.removeEventListener('keydown', keyHandler);
