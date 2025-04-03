@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HTML Analyzer ASCII Frontend</title>
+    <style>
+        body {
+            background-color: #000;
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            padding: 20px;
+            overflow: hidden;
+        }
+        
+        .ascii-art {
+            white-space: pre;
+            font-size: 14px;
+            line-height: 1;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        
+        .monitor {
+            border: 2px solid #444;
+            border-radius: 10px;
+            padding: 20px;
+            background-color: #111;
+            width: 1000px;
+            position: relative;
+        }
+        
+        .monitor-stand {
+            width: 200px;
+            height: 30px;
+            background-color: #333;
+            margin: 0 auto;
+            border-radius: 0 0 10px 10px;
+        }
+        
+        .monitor-base {
+            width: 300px;
+            height: 20px;
+            background-color: #333;
+            margin: 0 auto;
+            border-radius: 50%;
+        }
+        
+        .screen {
+            background-color: #000;
+            border: 2px solid #333;
+            border-radius: 5px;
+            padding: 15px;
+            height: 500px;
+            overflow-y: auto;
+            margin-bottom: 10px;
+            font-size: 16px;
+            position: relative;
+        }
+        
+        .input-area {
+            display: flex;
+            width: 100%;
+            margin-top: 10px;
+        }
+        
+        .prompt {
+            color: #0f0;
+            margin-right: 5px;
+        }
+        
+        #command-input {
+            flex-grow: 1;
+            background-color: #000;
+            border: none;
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+            font-size: 16px;
+            outline: none;
+        }
+        
+        .output {
+            color: #0f0;
+            margin: 5px 0;
+            word-wrap: break-word;
+        }
+        
+        .cursor {
+            display: inline-block;
+            width: 10px;
+            height: 16px;
+            background-color: #0f0;
+            animation: blink 1s infinite;
+            vertical-align: middle;
+        }
+        
+        @keyframes blink {
+            0%, 49% { opacity: 1; }
+            50%, 100% { opacity: 0; }
+        }
+        
+        .loading {
+            display: inline-block;
+            overflow: hidden;
+            height: 1.5em;
+            margin-top: -0.3em;
+            line-height: 1.5em;
+            vertical-align: text-bottom;
+        }
+        
+        .loading::after {
+            display: inline-table;
+            white-space: pre;
+            text-align: left;
+            content: "\\A.\\A..\\A...";
+            animation: loading 1s steps(4) infinite;
+        }
+        
+        @keyframes loading {
+            to { margin-top: -6em; }
+        }
+        
+        .scanline {
+            width: 100%;
+            height: 2px;
+            background-color: rgba(0, 255, 0, 0.1);
+            position: absolute;
+            top: 0;
+            left: 0;
+            animation: scanline 6s linear infinite;
+            pointer-events: none;
+        }
+        
+        @keyframes scanline {
+            0% { top: 0; }
+            100% { top: 100%; }
+        }
+        
+        .flicker {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 255, 0, 0.02);
+            pointer-events: none;
+            animation: flicker 0.3s infinite;
+        }
+        
+        @keyframes flicker {
+            0% { opacity: 0.5; }
+            50% { opacity: 1; }
+            100% { opacity: 0.5; }
+        }
+        
+        /* Hide scrollbar */
+        .screen::-webkit-scrollbar {
+            width: 0;
+            background: transparent;
+        }
+    </style>
+</head>
+<body>
+    <div class="ascii-art">
+        +--------------------------------------------------+
+        |                                                  |
+        |                 HTML ANALYZER                    |
+        |                                                  |
+        +--------------------------------------------------+
+    </div>
+    
+    <div class="monitor">
+        <div class="screen" id="screen">
+            <div class="scanline"></div>
+            <div class="flicker"></div>
+            <div class="output">HTML Analyzer Terminal v1.0</div>
+            <div class="output">Type a command or '--help' for assistance.</div>
+            <div class="output">></div>
+        </div>
+        <div class="input-area">
+            <span class="prompt">></span>
+            <input type="text" id="command-input" autofocus>
+            <span class="cursor"></span>
+        </div>
+    </div>
+    <div class="monitor-stand"></div>
+    <div class="monitor-base"></div>
+    
+    <script>
+        const commandInput = document.getElementById('command-input');
+        const screen = document.getElementById('screen');
+        
+        // Help text
+        const helpText = `
+Available commands:
+------------------
+analyze <url> [options]        : Analyze a website and display results
+  Options:
+    --modern                   : Display results in modern dashboard
+    --depth=<number>           : Set recursion depth (default: 0, only analyzes the main page)
+analyze-report <url> [file]    : Analyze a website and generate HTML report
+clear                          : Clear the screen
+help                           : Display this help message
+
+Examples:
+--------
+analyze https://www.example.com
+analyze https://www.fh-wedel.de --modern
+analyze https://www.fh-wedel.de --depth=2
+analyze https://www.fh-wedel.de --modern --depth=1
+analyze-report https://www.fh-wedel.de
+`;
+        
+        // Sample analysis results for demo purposes
+        const sampleResults = {
+            "https://www.example.com": {
+                title: "Example Domain",
+                tags: 14,
+                words: 30,
+                size: 1234,
+                links: 1,
+                images: 0,
+                css: 0,
+                js: 0
+            },
+            "https://www.fh-wedel.de": {
+                title: "Die Fachhochschule Wedel bei Hamburg",
+                tags: 1583,
+                words: 2620,
+                size: 143103,
+                links: 233,
+                images: 53,
+                css: 5,
+                js: 30
+            }
+        };
+        
+        // Function to add output to the screen
+        function addOutput(text, isCommand = false) {
+            const output = document.createElement('div');
+            output.className = 'output';
+            
+            if (isCommand) {
+                output.textContent = '> ' + text;
+            } else {
+                output.textContent = text;
+            }
+            
+            screen.appendChild(output);
+            screen.scrollTop = screen.scrollHeight;
+        }
+        
+        // Function to simulate typing effect
+        function typeText(text, element, speed = 10) {
+            return new Promise(resolve => {
+                let i = 0;
+                element.textContent = '';
+                
+                function type() {
+                    if (i < text.length) {
+                        element.textContent += text.charAt(i);
+                        i++;
+                        setTimeout(type, speed);
+                    } else {
+                        resolve();
+                    }
+                }
+                
+                type();
+            });
+        }
+        
+        // Function to simulate analyzing a website
+        async function analyzeWebsite(url, options = {}) {
+            const modern = options.modern || false;
+            const depth = options.depth !== undefined ? options.depth : 0;
+            
+            const loadingOutput = document.createElement('div');
+            loadingOutput.className = 'output';
+            loadingOutput.textContent = `Analyzing ${url} with depth=${depth} `;
+            const loadingSpan = document.createElement('span');
+            loadingSpan.className = 'loading';
+            loadingOutput.appendChild(loadingSpan);
+            screen.appendChild(loadingOutput);
+            screen.scrollTop = screen.scrollHeight;
+            
+            // Simulate processing time - deeper analysis takes longer
+            await new Promise(resolve => setTimeout(resolve, 2000 + (depth * 500)));
+            
+            // Remove loading indicator
+            screen.removeChild(loadingOutput);
+            
+            // Get base results
+            let results = sampleResults[url];
+            
+            // If no predefined results, generate random ones based on depth
+            if (!results) {
+                const depthMultiplier = depth > 0 ? (1 + (depth * 0.5)) : 1;
+                results = {
+                    title: "Unknown Website",
+                    tags: Math.floor(Math.random() * 2000 * depthMultiplier) + 100,
+                    words: Math.floor(Math.random() * 3000 * depthMultiplier) + 200,
+                    size: Math.floor(Math.random() * 200000 * depthMultiplier) + 10000,
+                    links: Math.floor(Math.random() * 300 * depthMultiplier) + 10,
+                    images: Math.floor(Math.random() * 100 * depthMultiplier) + 5,
+                    css: Math.floor(Math.random() * 10 * depthMultiplier) + 1,
+                    js: Math.floor(Math.random() * 30 * depthMultiplier) + 5,
+                    pagesAnalyzed: depth > 0 ? Math.floor(Math.random() * 20 * depth) + 1 : 1
+                };
+            } else {
+                // Add pages analyzed based on depth for predefined results
+                results.pagesAnalyzed = depth > 0 ? Math.min(depth * 10, results.links) : 1;
+            }
+            
+            if (modern) {
+                displayModernDashboard(url, results, depth);
+            } else {
+                // Display classic results
+                addOutput('=== HTML Analysis for ' + url + ' ===');
+                addOutput('Title: ' + results.title);
+                if (depth > 0) {
+                    addOutput('Recursion depth: ' + depth);
+                    addOutput('Pages analyzed: ' + results.pagesAnalyzed);
+                }
+                addOutput('Number of tags: ' + results.tags);
+                addOutput('Number of words: ' + results.words);
+                addOutput('Size in bytes: ' + results.size);
+                addOutput('Number of links: ' + results.links);
+                addOutput('Number of images: ' + results.images);
+                addOutput('Number of CSS files: ' + results.css);
+                addOutput('Number of JavaScript files: ' + results.js);
+            }
+        }
+        
+        // Function to display a modern dashboard
+        function displayModernDashboard(url, results, depth = 0) {
+            // Create dashboard container
+            const dashboard = document.createElement('div');
+            dashboard.className = 'output';
+            dashboard.style.padding = '10px';
+            dashboard.style.marginBottom = '15px';
+            dashboard.style.border = '1px solid #0f0';
+            dashboard.style.borderRadius = '5px';
+            
+            // Create header
+            const header = document.createElement('div');
+            header.style.textAlign = 'center';
+            header.style.marginBottom = '10px';
+            header.style.padding = '5px';
+            header.style.borderBottom = '1px solid #0f0';
+            let headerText = `<span style="font-size: 16px; font-weight: bold;">📊 DASHBOARD: ${results.title}</span><br>
+                             <span style="font-size: 12px;">${url}</span>`;
+            
+            if (depth > 0) {
+                headerText += `<br><span style="font-size: 12px;">Recursion Depth: ${depth} | Pages Analyzed: ${results.pagesAnalyzed}</span>`;
+            }
+            
+            header.innerHTML = headerText;
+            dashboard.appendChild(header);
+            
+            // Create stats grid
+            const statsGrid = document.createElement('div');
+            statsGrid.style.display = 'grid';
+            statsGrid.style.gridTemplateColumns = 'repeat(2, 1fr)';
+            statsGrid.style.gap = '10px';
+            statsGrid.style.marginBottom = '15px';
+            
+            // Add stat boxes
+            const statBoxes = [
+                { icon: '🏷️', label: 'Tags', value: results.tags.toLocaleString() },
+                { icon: '📝', label: 'Words', value: results.words.toLocaleString() },
+                { icon: '📦', label: 'Size', value: formatBytes(results.size) },
+                { icon: '🔗', label: 'Links', value: results.links.toLocaleString() },
+                { icon: '🖼️', label: 'Images', value: results.images.toLocaleString() },
+                { icon: '🎨', label: 'CSS Files', value: results.css.toLocaleString() },
+                { icon: '⚙️', label: 'JS Files', value: results.js.toLocaleString() },
+                { icon: '⏱️', label: 'Load Time', value: estimateLoadTime(results.size) + ' s' }
+            ];
+            
+            statBoxes.forEach(stat => {
+                const box = document.createElement('div');
+                box.style.padding = '8px';
+                box.style.border = '1px solid #0a0';
+                box.style.borderRadius = '4px';
+                box.style.backgroundColor = 'rgba(0, 255, 0, 0.05)';
+                
+                box.innerHTML = `<div style="font-size: 18px; margin-bottom: 5px;">${stat.icon} ${stat.label}</div>
+                                <div style="font-size: 20px; text-align: center; font-weight: bold;">${stat.value}</div>`;
+                statsGrid.appendChild(box);
+            });
+            
+            dashboard.appendChild(statsGrid);
+            
+            // Add composition chart
+            const chartContainer = document.createElement('div');
+            chartContainer.style.marginBottom = '15px';
+            chartContainer.style.padding = '10px';
+            chartContainer.style.border = '1px solid #0a0';
+            chartContainer.style.borderRadius = '4px';
+            chartContainer.style.backgroundColor = 'rgba(0, 255, 0, 0.05)';
+            
+            const chartTitle = document.createElement('div');
+            chartTitle.style.textAlign = 'center';
+            chartTitle.style.marginBottom = '10px';
+            chartTitle.innerHTML = '📊 Page Composition';
+            chartContainer.appendChild(chartTitle);
+            
+            const chart = document.createElement('div');
+            chart.style.display = 'flex';
+            chart.style.height = '30px';
+            chart.style.width = '100%';
+            chart.style.borderRadius = '3px';
+            chart.style.overflow = 'hidden';
+            
+            // Calculate percentages for chart
+            const totalSize = results.size;
+            const htmlPercent = 40 + Math.random() * 20; // Simulated values
+            const cssPercent = 5 + Math.random() * 10;
+            const jsPercent = 10 + Math.random() * 20;
+            const imgPercent = 100 - htmlPercent - cssPercent - jsPercent;
+            
+            // Create chart segments
+            const htmlSegment = document.createElement('div');
+            htmlSegment.style.width = htmlPercent + '%';
+            htmlSegment.style.backgroundColor = '#00cc00';
+            htmlSegment.title = 'HTML: ' + Math.round(htmlPercent) + '%';
+            chart.appendChild(htmlSegment);
+            
+            const cssSegment = document.createElement('div');
+            cssSegment.style.width = cssPercent + '%';
+            cssSegment.style.backgroundColor = '#00ff00';
+            cssSegment.title = 'CSS: ' + Math.round(cssPercent) + '%';
+            chart.appendChild(cssSegment);
+            
+            const jsSegment = document.createElement('div');
+            jsSegment.style.width = jsPercent + '%';
+            jsSegment.style.backgroundColor = '#88ff88';
+            jsSegment.title = 'JavaScript: ' + Math.round(jsPercent) + '%';
+            chart.appendChild(jsSegment);
+            
+            const imgSegment = document.createElement('div');
+            imgSegment.style.width = imgPercent + '%';
+            imgSegment.style.backgroundColor = '#44aa44';
+            imgSegment.title = 'Images: ' + Math.round(imgPercent) + '%';
+            chart.appendChild(imgSegment);
+            
+            chartContainer.appendChild(chart);
+            
+            // Add legend
+            const legend = document.createElement('div');
+            legend.style.display = 'flex';
+            legend.style.justifyContent = 'space-around';
+            legend.style.marginTop = '5px';
+            legend.style.fontSize = '12px';
+            
+            const legendItems = [
+                { color: '#00cc00', label: 'HTML ' + Math.round(htmlPercent) + '%' },
+                { color: '#00ff00', label: 'CSS ' + Math.round(cssPercent) + '%' },
+                { color: '#88ff88', label: 'JS ' + Math.round(jsPercent) + '%' },
+                { color: '#44aa44', label: 'Images ' + Math.round(imgPercent) + '%' }
+            ];
+            
+            legendItems.forEach(item => {
+                const legendItem = document.createElement('div');
+                legendItem.style.display = 'flex';
+                legendItem.style.alignItems = 'center';
+                
+                const colorBox = document.createElement('div');
+                colorBox.style.width = '10px';
+                colorBox.style.height = '10px';
+                colorBox.style.backgroundColor = item.color;
+                colorBox.style.marginRight = '5px';
+                
+                legendItem.appendChild(colorBox);
+                legendItem.appendChild(document.createTextNode(item.label));
+                legend.appendChild(legendItem);
+            });
+            
+            chartContainer.appendChild(legend);
+            dashboard.appendChild(chartContainer);
+            
+            // Add footer with timestamp
+            const footer = document.createElement('div');
+            footer.style.textAlign = 'center';
+            footer.style.fontSize = '12px';
+            footer.style.marginTop = '10px';
+            footer.style.color = '#0a0';
+            
+            const now = new Date();
+            footer.textContent = 'Analysis completed at ' + now.toLocaleTimeString();
+            dashboard.appendChild(footer);
+            
+            // Add dashboard to screen
+            screen.appendChild(dashboard);
+            screen.scrollTop = screen.scrollHeight;
+        }
+        
+        // Helper function to format bytes
+        function formatBytes(bytes) {
+            if (bytes < 1024) return bytes + " B";
+            else if (bytes < 1048576) return (bytes / 1024).toFixed(1) + " KB";
+            else return (bytes / 1048576).toFixed(1) + " MB";
+        }
+        
+        // Helper function to estimate load time
+        function estimateLoadTime(bytes) {
+            // Simulate a 3G connection (roughly 1.5 Mbps = 187.5 KB/s)
+            const speedKBps = 187.5;
+            const timeSeconds = bytes / 1024 / speedKBps;
+            return timeSeconds.toFixed(2);
+        }
+        
+        // Function to simulate generating a report
+        async function generateReport(url, file = 'analysis_report.html') {
+            const loadingOutput = document.createElement('div');
+            loadingOutput.className = 'output';
+            loadingOutput.textContent = 'Analyzing ' + url + ' ';
+            const loadingSpan = document.createElement('span');
+            loadingSpan.className = 'loading';
+            loadingOutput.appendChild(loadingSpan);
+            screen.appendChild(loadingOutput);
+            screen.scrollTop = screen.scrollHeight;
+            
+            // Simulate processing time
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            // Remove loading indicator
+            screen.removeChild(loadingOutput);
+            
+            // Display results
+            const results = sampleResults[url] || {
+                title: "Unknown Website",
+                tags: Math.floor(Math.random() * 2000) + 100,
+                words: Math.floor(Math.random() * 3000) + 200,
+                size: Math.floor(Math.random() * 200000) + 10000,
+                links: Math.floor(Math.random() * 300) + 10,
+                images: Math.floor(Math.random() * 100) + 5,
+                css: Math.floor(Math.random() * 10) + 1,
+                js: Math.floor(Math.random() * 30) + 5
+            };
+            
+            addOutput('=== HTML Analysis for ' + url + ' ===');
+            addOutput('Title: ' + results.title);
+            addOutput('Number of tags: ' + results.tags);
+            addOutput('Number of words: ' + results.words);
+            addOutput('Size in bytes: ' + results.size);
+            addOutput('Number of links: ' + results.links);
+            addOutput('Number of images: ' + results.images);
+            addOutput('Number of CSS files: ' + results.css);
+            addOutput('Number of JavaScript files: ' + results.js);
+            
+            addOutput('');
+            addOutput('HTML report generated: ' + file);
+        }
+        
+        // Function to clear the screen
+        function clearScreen() {
+            while (screen.children.length > 2) {
+                screen.removeChild(screen.children[2]);
+            }
+            addOutput('Screen cleared.');
+        }
+        
+        // Handle command input
+        commandInput.addEventListener('keydown', async function(event) {
+            if (event.key === 'Enter') {
+                const command = commandInput.value.trim();
+                commandInput.value = '';
+                
+                if (command) {
+                    addOutput(command, true);
+                    
+                    if (command === '--help' || command === 'help') {
+                        const lines = helpText.trim().split('\n');
+                        for (const line of lines) {
+                            addOutput(line);
+                        }
+                    } else if (command === 'clear') {
+                        clearScreen();
+                    } else if (command.startsWith('analyze ')) {
+                        const parts = command.substring(8).trim().split(' ');
+                        let url = parts[0];
+                        let options = {
+                            modern: false,
+                            depth: 0
+                        };
+                        
+                        // Process all parts after the URL for options
+                        if (parts.length > 1) {
+                            // Extract all options
+                            for (let i = 1; i < parts.length; i++) {
+                                const part = parts[i];
+                                
+                                // Check for --modern flag
+                                if (part === '--modern') {
+                                    options.modern = true;
+                                }
+                                
+                                // Check for --depth=X parameter
+                                if (part.startsWith('--depth=')) {
+                                    const depthValue = parseInt(part.substring(8), 10);
+                                    if (!isNaN(depthValue) && depthValue >= 0) {
+                                        options.depth = depthValue;
+                                    } else {
+                                        addOutput('Warning: Invalid depth value. Using default depth=0.');
+                                    }
+                                }
+                            }
+                        }
+                        
+                        if (url) {
+                            await analyzeWebsite(url, options);
+                        } else {
+                            addOutput('Error: URL is required. Example: analyze https://www.example.com');
+                        }
+                    } else if (command.startsWith('analyze-report ')) {
+                        const parts = command.substring(15).trim().split(' ');
+                        const url = parts[0];
+                        const file = parts[1] || 'analysis_report.html';
+                        
+                        if (url) {
+                            await generateReport(url, file);
+                        } else {
+                            addOutput('Error: URL is required. Example: analyze-report https://www.example.com');
+                        }
+                    } else {
+                        addOutput('Unknown command: ' + command);
+                        addOutput('Type "--help" for available commands.');
+                    }
+                }
+            }
+        });
+        
+        // Focus the input field when clicking anywhere in the monitor
+        document.querySelector('.monitor').addEventListener('click', function() {
+            commandInput.focus();
+        });
+        
+        // Function to display scrolling names lock screen
+        async function showLockScreen() {
+            // Disable input during animation
+            commandInput.disabled = true;
+            
+            // Clear any existing content
+            while (screen.children.length > 2) {
+                screen.removeChild(screen.children[2]);
+            }
+            
+            // Add lock screen header
+            addOutput('');
+            addOutput('');
+            addOutput('');
+            addOutput('');
+            addOutput('');
+            addOutput('');
+            addOutput('');
+            addOutput('');
+            addOutput('');
+            addOutput('');
+            addOutput('                HTML ANALYZER SECURITY SYSTEM');
+            addOutput('                ===========================');
+            addOutput('');
+            
+            // Create license key input
+            const licenseDiv = document.createElement('div');
+            licenseDiv.className = 'output';
+            licenseDiv.style.textAlign = 'center';
+            licenseDiv.style.marginTop = '20px';
+            licenseDiv.innerHTML = 'ENTER LICENSE KEY: <span id="license-key"></span><span class="cursor"></span>';
+            screen.appendChild(licenseDiv);
+            
+            const licenseKeySpan = document.getElementById('license-key');
+            let licenseKey = '';
+            
+            // Start scrolling names animation
+            let animationRunning = true;
+            const scrollingAnimation = async () => {
+                const width = 80; // Screen width in characters
+                const names = [
+                    "SVEN BOHNSTEDT - FRONTEND INTERFACE",
+                    "PAUL POHL - CORE ANALYSIS ENGINE"
+                ];
+                
+                let positions = [0, -width/2]; // Start positions for each name
+                
+                while (animationRunning) {
+                    // Clear previous scrolling line
+                    const scrollLine = document.createElement('div');
+                    scrollLine.className = 'output';
+                    scrollLine.id = 'scrolling-line';
+                    
+                    // If there's already a scrolling line, replace it
+                    const existingScrollLine = document.getElementById('scrolling-line');
+                    if (existingScrollLine) {
+                        existingScrollLine.remove();
+                    }
+                    
+                    // Create the scrolling line with names at their current positions
+                    let line = ' '.repeat(width);
+                    
+                    for (let i = 0; i < names.length; i++) {
+                        const name = names[i];
+                        const pos = Math.floor(positions[i]);
+                        
+                        // Only draw the name if it's at least partially on screen
+                        if (pos < width && pos + name.length > 0) {
+                            // Calculate visible portion of the name
+                            const startIdx = Math.max(0, -pos);
+                            const endIdx = Math.min(name.length, width - pos);
+                            const visiblePart = name.substring(startIdx, endIdx);
+                            
+                            // Calculate position in the line
+                            const linePos = Math.max(0, pos);
+                            
+                            // Insert the visible part into the line
+                            line = line.substring(0, linePos) + 
+                                   visiblePart + 
+                                   line.substring(linePos + visiblePart.length);
+                        }
+                        
+                        // Update position for next frame
+                        positions[i] = (positions[i] + 1) % (width + name.length);
+                    }
+                    
+                    // Add the scrolling line to the screen
+                    addOutput(line);
+                    
+                    // Wait before next frame
+                    await new Promise(resolve => setTimeout(resolve, 150));
+                }
+            };
+            
+            // Start the animation
+            scrollingAnimation();
+            
+            // Handle key presses for license key
+            const keyHandler = (event) => {
+                // Prevent default behavior
+                event.preventDefault();
+                
+                if (event.key === 'Enter') {
+                    // Check if license key is correct
+                    if (licenseKey.toLowerCase() === 'wedel') {
+                        // Stop animation and remove key handler
+                        animationRunning = false;
+                        document.removeEventListener('keydown', keyHandler);
+                        
+                        // Show success message and start the analyzer
+                        licenseKeySpan.textContent = licenseKey + ' ✓';
+                        setTimeout(() => {
+                            startAnalyzer();
+                        }, 1000);
+                    } else {
+                        // Show error message and clear input
+                        licenseKeySpan.textContent = licenseKey + ' ✗';
+                        setTimeout(() => {
+                            licenseKey = '';
+                            licenseKeySpan.textContent = '';
+                        }, 1000);
+                    }
+                } else if (event.key === 'Backspace') {
+                    // Remove last character
+                    licenseKey = licenseKey.slice(0, -1);
+                    licenseKeySpan.textContent = licenseKey;
+                } else if (event.key.length === 1) {
+                    // Add character to license key
+                    licenseKey += event.key;
+                    licenseKeySpan.textContent = licenseKey;
+                }
+            };
+            
+            // Add key handler
+            document.addEventListener('keydown', keyHandler);
+        }
+        
+        // Function to start the analyzer after successful login
+        async function startAnalyzer() {
+            // Clear any existing content
+            while (screen.children.length > 2) {
+                screen.removeChild(screen.children[2]);
+            }
+            
+            // Show welcome message
+            addOutput('');
+            addOutput('');
+            addOutput('');
+            addOutput('                ACCESS GRANTED');
+            addOutput('                =============');
+            addOutput('');
+            addOutput('        Welcome to HTML Analyzer v1.0');
+            addOutput('');
+            addOutput('        Loading system...');
+            
+            // Wait a moment
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            // Clear screen
+            while (screen.children.length > 2) {
+                screen.removeChild(screen.children[2]);
+            }
+            
+            // Show ready message
+            addOutput('HTML Analyzer v1.0 - Ready');
+            addOutput('Type \'help\' or \'--help\' for available commands.');
+            addOutput('');
+            
+            // Re-enable input
+            commandInput.disabled = false;
+            commandInput.focus();
+        }
+        
+        // Function to simulate boot sequence
+        async function bootSequence() {
+            // Disable input during boot
+            commandInput.disabled = true;
+            
+            // Clear any existing content
+            while (screen.children.length > 2) {
+                screen.removeChild(screen.children[2]);
+            }
+            
+            // Add boot messages with delays
+            const bootMessages = [
+                // BIOS and hardware detection
+                "Starting 80486DX/33 BIOS v2.0...",
+                "Memory Test: 640K Base, 15360K Extended",
+                "Detecting Floppy Disk Drives...",
+                "Floppy Disk Drive A: 1.44M",
+                "Floppy Disk Drive B: 1.44M",
+                "Detecting Hard Drives...",
+                "Primary Master: Quantum Fireball 850MB",
+                "Loading MS-DOS 6.22...",
+                "",
+                // DOS drivers
+                "HIMEM.SYS loaded - High Memory Manager v3.10",
+                "EMM386.EXE loaded - Expanded Memory Manager v4.49",
+                "MOUSE.COM loaded - Microsoft Mouse Driver v9.1",
+                "",
+                // Linux boot sequence
+                "Booting Linux Kernel 2.6.32...",
+                "CPU: Intel(R) 80486DX/33 stepping 02",
+                "BIOS-provided physical RAM map:",
+                "  BIOS-e820: 0000000000000000 - 000000000009fc00 (usable)",
+                "  BIOS-e820: 000000000009fc00 - 00000000000a0000 (reserved)",
+                "  BIOS-e820: 00000000000f0000 - 0000000000100000 (reserved)",
+                "  BIOS-e820: 0000000000100000 - 0000000010000000 (usable)",
+                "  BIOS-e820: 00000000ffff0000 - 0000000100000000 (reserved)",
+                "Console: colour VGA+ 80x25",
+                "Checking if this processor honours the WP bit even in supervisor mode... Ok.",
+                "Initializing cgroup subsys cpuset",
+                "Initializing cgroup subsys cpu",
+                "Linux version 2.6.32 (gcc version 4.4.3)",
+                "Command line: ro root=UUID=f5d1c298-c328-4e5c-9b0e-7e6d2f5f5c5f",
+                "Kernel command line: ro root=UUID=f5d1c298-c328-4e5c-9b0e-7e6d2f5f5c5f",
+                "PID hash table entries: 4096 (order: 2, 16384 bytes)",
+                "Dentry cache hash table entries: 65536 (order: 6, 262144 bytes)",
+                "Inode-cache hash table entries: 32768 (order: 5, 131072 bytes)",
+                "Memory: 255MB = 255MB total",
+                "Memory: 252MB available (2252k kernel code, 148k absent, 2600k reserved)",
+                "Calibrating delay loop... 66.56 BogoMIPS",
+                "Mount-cache hash table entries: 512",
+                "CPU: Intel 80486DX stepping 02",
+                "Checking 'hlt' instruction... OK.",
+                "Initializing CPU#0",
+                "Brought up 1 CPUs",
+                "devtmpfs: initialized",
+                "NET: Registered protocol family 16",
+                "ACPI: Interpreter disabled.",
+                "io scheduler noop registered",
+                "io scheduler deadline registered (default)",
+                "io scheduler cfq registered",
+                "Serial: 8250/16550 driver, 4 ports, IRQ sharing enabled",
+                "serial8250: ttyS0 at I/O 0x3f8 (irq = 4) is a 16550A",
+                "serial8250: ttyS1 at I/O 0x2f8 (irq = 3) is a 16550A",
+                "RAMDISK: Compressed image found at block 0",
+                "VFS: Mounted root (ext4 filesystem) readonly on device 1:0.",
+                "Freeing unused kernel memory: 340k freed",
+                "Starting init: /sbin/init exists",
+                "",
+                // HTML Analyzer components
+                "Loading HTML Analyzer Components...",
+                "JSOUP.DLL loaded - HTML Parser Engine v1.14.3",
+                "CRAWLER.SYS loaded - Web Crawler Module v2.3",
+                "ANALYZER.EXE loaded - HTML Analysis Core v1.0",
+                "DASHBOARD.DLL loaded - Visualization Module v1.2",
+                "",
+                // Engineer credits
+                "Loading Engineer Credits...",
+                "PAUL.POHL - Core Analysis Engine",
+                "SVEN.BOHNSTEDT - Frontend Interface",
+                "",
+                "Starting security system..."
+            ];
+            
+            // Clear any existing content first
+            while (screen.children.length > 2) {
+                screen.removeChild(screen.children[2]);
+            }
+            
+            // Add each message with a delay
+            for (const message of bootMessages) {
+                await new Promise(resolve => setTimeout(resolve, 200));
+                addOutput(message);
+                screen.scrollTop = screen.scrollHeight;
+            }
+            
+            // Wait a moment before showing the lock screen
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            // Show the lock screen
+            showLockScreen();
+        }
+        
+        // Add console logs for debugging
+        console.log("Script loaded, starting boot sequence...");
+        
+        // Run boot sequence on page load
+        window.onload = function() {
+            console.log("Window loaded, executing boot sequence");
+            bootSequence();
+        };
