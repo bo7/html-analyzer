@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Generation Demo (No Charts)</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        
+        .button {
+            background-color: #4e73df;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 10px 2px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        
+        .report-data {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>HTML Analyzer PDF Report Demo (No Charts)</h1>
+    
+    <div class="report-data">
+        <h2>Analysis Results for: https://www.fh-wedel.de</h2>
+        <p><strong>Title:</strong> Die Fachhochschule Wedel bei Hamburg</p>
+        <p><strong>Number of tags:</strong> 1583</p>
+        <p><strong>Number of words:</strong> 2620</p>
+        <p><strong>Size in bytes:</strong> 143103</p>
+        <p><strong>Number of links:</strong> 233</p>
+        <p><strong>Number of images:</strong> 53</p>
+        <p><strong>Number of CSS files:</strong> 5</p>
+        <p><strong>Number of JavaScript files:</strong> 30</p>
+    </div>
+    
+    <div style="text-align: center;">
+        <button class="button" onclick="generatePDF()">Generate PDF Report</button>
+    </div>
+    
+    <script>
+        // Sample report data
+        const reportData = {
+            url: 'https://www.fh-wedel.de',
+            title: 'Die Fachhochschule Wedel bei Hamburg',
+            tags: 1583,
+            words: 2620,
+            size: 143103,
+            links: 233,
+            images: 53,
+            css: 5,
+            js: 30
+        };
+        
+        // Function to generate simple PDF without charts
+        function generatePDF() {
+            try {
+                // Initialize jsPDF
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF({
+                    orientation: 'portrait',
+                    unit: 'mm',
+                    format: 'a4'
+                });
+                
+                // Define colors for the document
+                const colors = {
+                    primary: '#4e73df',
+                    dark: '#5a5c69',
+                    light: '#f8f9fc'
+                };
+                
+                // Add header
+                doc.setFillColor(colors.dark);
+                doc.rect(0, 0, 210, 25, 'F');
+                doc.setTextColor(255, 255, 255);
+                doc.setFontSize(20);
+                doc.text('HTML ANALYZER', 105, 15, { align: 'center' });
+                
+                // Add report title
+                doc.setFillColor(colors.light);
+                doc.rect(0, 25, 210, 15, 'F');
+                doc.setTextColor(colors.dark);
+                doc.setFontSize(16);
+                doc.text('Analysis Report', 105, 35, { align: 'center' });
+                
+                // Add website info
+                doc.setTextColor(colors.dark);
+                doc.setFontSize(14);
+                doc.text('Website Analysis Results', 105, 50, { align: 'center' });
+                doc.setFontSize(12);
+                doc.text('URL: ' + reportData.url, 20, 60);
+                doc.text('Title: ' + reportData.title, 20, 70);
+                
+                // Add statistics
+                doc.setFontSize(14);
+                doc.text('Statistics', 105, 90, { align: 'center' });
+                
+                // Create a simple table for statistics
+                const startY = 100;
+                const lineHeight = 10;
+                
+                doc.setFontSize(12);
+                doc.text('HTML Tags:', 40, startY);
+                doc.text(reportData.tags.toString(), 120, startY);
+                
+                doc.text('Words:', 40, startY + lineHeight);
+                doc.text(reportData.words.toString(), 120, startY + lineHeight);
+                
+                doc.text('Size in bytes:', 40, startY + 2 * lineHeight);
+                doc.text(reportData.size.toString(), 120, startY + 2 * lineHeight);
+                
+                doc.text('Links:', 40, startY + 3 * lineHeight);
+                doc.text(reportData.links.toString(), 120, startY + 3 * lineHeight);
+                
+                doc.text('Images:', 40, startY + 4 * lineHeight);
+                doc.text(reportData.images.toString(), 120, startY + 4 * lineHeight);
+                
+                doc.text('CSS Files:', 40, startY + 5 * lineHeight);
+                doc.text(reportData.css.toString(), 120, startY + 5 * lineHeight);
+                
+                doc.text('JavaScript Files:', 40, startY + 6 * lineHeight);
+                doc.text(reportData.js.toString(), 120, startY + 6 * lineHeight);
+                
+                // Add size information
+                doc.setFontSize(14);
+                doc.text('Size Information', 105, 180, { align: 'center' });
+                doc.setFontSize(12);
+                doc.text(`Total Size: ${(reportData.size / 1024).toFixed(1)} KB`, 105, 190, { align: 'center' });
+                
+                // Add footer
+                doc.setFillColor(colors.dark);
+                doc.rect(0, 280, 210, 17, 'F');
+                doc.setTextColor(255, 255, 255);
+                doc.setFontSize(10);
+                doc.text('Generated by HTML Analyzer v1.0', 105, 287, { align: 'center' });
+                doc.setFontSize(8);
+                doc.text(`Date: ${new Date().toLocaleString()}`, 105, 293, { align: 'center' });
+                
+                // Save the PDF
+                doc.save("fh-wedel.de-report.pdf");
+                
+                alert("PDF generated and downloaded successfully!");
+            } catch (error) {
+                console.error("Error generating PDF:", error);
+                alert("Error generating PDF: " + error.message);
+            }
+        }
+    </script>
+</body>
+</html>
