@@ -1,0 +1,91 @@
+HTML ANALYZER
+
+This project contains a set of Java tools for analyzing HTML web pages. The original code was designed to use a library called be.arci.html, but since this library is not publicly available, we've created alternative versions using the popular jsoup library.
+
+COMPONENTS
+
+Original Components (Not Working):
+- einstieg.java: Simple entry point that uses the be.arci.html library
+- ConsolenAnwendung.java: Command-line application for analyzing web pages
+- BaueSeiten.java: Handles page crawling and recursive analysis
+- OnlineParser.java: Parses HTML pages and extracts information
+- SeitenElement.java: Stores information about a parsed page
+- BaueHtmlAusgabe.java: Creates an HTML report with the analysis results
+- makePfad.java: Utility class for URL/path manipulation
+- ReferenzierteObjekte.java: Represents referenced objects in HTML pages
+
+Modified Components (Using jsoup):
+- einstiegJsoup.java: Simple entry point that uses jsoup
+- SimpleHtmlAnalyzer.java: Standalone HTML analyzer using jsoup
+- SimpleHtmlAnalyzerWithReport.java: Standalone HTML analyzer that generates an HTML report
+- ascii_frontend.html: Interactive web-based ASCII frontend with retro terminal look
+
+REQUIREMENTS
+- Java 8 or higher
+- jsoup library (included in the lib directory)
+
+HOW TO USE
+
+ASCII Frontend:
+This is an interactive web-based frontend with a retro terminal look. It provides a command-line interface for analyzing websites.
+
+# Open
+open ascii_frontend.html
+
+Available commands in the terminal:
+- analyze <url> [options]: Analyze a website and display results
+  Options:
+    --modern: Display results in a modern dashboard
+    --depth=<number>: Set recursion depth (default: 0, only analyzes the main page)
+- analyze-report <url> [file]: Analyze a website and generate HTML report
+- clear: Clear the screen
+- help or --help: Display help message
+
+Examples:
+- analyze https://www.example.com
+- analyze https://www.fh-wedel.de --modern
+- analyze https://www.fh-wedel.de --depth=2
+- analyze https://www.fh-wedel.de --modern --depth=1
+
+SimpleHtmlAnalyzerWithReport:
+This is a standalone HTML analyzer that generates an HTML report. It provides detailed information about a web page, including the number of tags, words, links, images, CSS files, and JavaScript files.
+
+# Compile
+javac -cp lib/jsoup.jar SimpleHtmlAnalyzerWithReport.java
+
+# Run
+java -cp lib/jsoup.jar:. SimpleHtmlAnalyzerWithReport <url> [output_file]
+
+Example:
+java -cp lib/jsoup.jar:. SimpleHtmlAnalyzerWithReport https://www.example.com
+
+This will generate an HTML report file named "analysis_report.html" in the current directory.
+
+SimpleHtmlAnalyzer:
+This is a standalone HTML analyzer that doesn't depend on the other classes. It provides basic information about a web page, including the number of tags, words, links, and images.
+
+# Compile
+javac -cp lib/jsoup.jar SimpleHtmlAnalyzer.java
+
+# Run
+java -cp lib/jsoup.jar:. SimpleHtmlAnalyzer <url>
+
+Example:
+java -cp lib/jsoup.jar:. SimpleHtmlAnalyzer https://www.example.com
+
+einstiegJsoup:
+This is a simple entry point that uses jsoup to parse an HTML page and count the tags.
+
+# Compile
+javac -cp lib/jsoup.jar einstiegJsoup.java
+
+# Run
+java -cp lib/jsoup.jar:. einstiegJsoup <url>
+
+Example:
+java -cp lib/jsoup.jar:. einstiegJsoup https://www.example.com
+
+NOTES
+- The original code was designed to use the be.arci.html library, which is not publicly available.
+- The modified versions use jsoup, which is a popular Java HTML parser.
+- The original code contains German comments and variable names.

@@ -1,0 +1,37 @@
+HTML ANALYZER DEPLOYMENT INSTRUCTIONS
+=====================================
+
+DEPLOYMENT TO SERVER (144.91.108.111)
+-------------------------------------
+
+1. Automated Deployment:
+   Run the deployment script:
+   $ ./deploy.sh
+
+2. Manual Deployment:
+   a. Copy files to server:
+      $ scp -r *.html *.java Dockerfile docker-compose.yml b07@144.91.108.111:/opt/html-analyzer/
+   
+   b. SSH into server:
+      $ ssh b07@144.91.108.111
+   
+   c. Navigate to directory:
+      $ cd /opt/html-analyzer
+   
+   d. Build and start Docker container:
+      $ sudo docker-compose up -d --build
+
+3. Access the application:
+   http://144.91.108.111:6464/
+   
+   Use "wedel" as the password when prompted.
+
+LOCAL DEVELOPMENT
+----------------
+To run locally:
+$ open simple_ascii_frontend.html
+
+CREDITS
+-------
+- Sven Bohnstedt - Frontend Interface
+- Paul Pohl - Core Analysis Engine

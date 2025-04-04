@@ -1,0 +1,2249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HTML Analyzer ASCII Frontend</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        body {
+            background-color: #000;
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            padding: 20px;
+            overflow: hidden;
+        }
+        
+        .monitor {
+            border: 2px solid #444;
+            border-radius: 10px;
+            padding: 20px;
+            background-color: #111;
+            width: 800px;
+            position: relative;
+        }
+        
+        .screen {
+            background-color: #000;
+            border: 2px solid #333;
+            border-radius: 5px;
+            padding: 15px;
+            height: 400px;
+            overflow-y: auto;
+            margin-bottom: 10px;
+            font-size: 16px;
+            position: relative;
+        }
+        
+        .output {
+            color: #0f0;
+            margin: 5px 0;
+            word-wrap: break-word;
+        }
+        
+        .scanline {
+            width: 100%;
+            height: 2px;
+            background-color: rgba(0, 255, 0, 0.1);
+            position: absolute;
+            top: 0;
+            left: 0;
+            animation: scanline 6s linear infinite;
+            pointer-events: none;
+        }
+        
+        @keyframes scanline {
+            0% { top: 0; }
+            100% { top: 100%; }
+        }
+        
+        /* Hide scrollbar */
+        .screen::-webkit-scrollbar {
+            width: 0;
+            background: transparent;
+        }
+
+        @keyframes blink {
+            0% { opacity: 1; }
+            50% { opacity: 0; }
+            100% { opacity: 1; }
+        }
+        
+        /* Hidden chart containers for PDF generation */
+        .chart-container {
+            display: none;
+            width: 400px;
+            height: 300px;
+        }
+    </style>
+</head>
+<body>
+    <div class="monitor">
+        <div class="screen" id="screen">
+            <div class="scanline"></div>
+            <div class="output">HTML Analyzer Terminal v1.0</div>
+        </div>
+    </div>
+    
+    <!-- Hidden chart containers for PDF generation -->
+    <div id="charts-container" style="display: none;">
+        <div class="chart-container">
+            <canvas id="tagsChart"></canvas>
+        </div>
+        <div class="chart-container">
+            <canvas id="filesChart"></canvas>
+        </div>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log("DOM loaded, starting boot sequence...");
+            bootSequence();
+        });
+        
+        const screen = document.getElementById('screen');
+        let pdfMode = false;
+        let reportData = null;
+        
+        // Function to add output to the screen
+        function addOutput(text) {
+            const output = document.createElement('div');
+            output.className = 'output';
+            output.textContent = text;
+            screen.appendChild(output);
+            screen.scrollTop = screen.scrollHeight;
+        }
+        
+        // Function to display scrolling names and login screen
+        async function showLoginScreen() {
+            console.log("Starting login screen...");
+            
+            // Clear any existing content
+            while (screen.children.length > 1) {
+                screen.removeChild(screen.children[1]);
+            }
+            
+            // Add lock screen header
+            addOutput('');
+            addOutput('');
+            addOutput('                HTML ANALYZER SECURITY SYSTEM');
+            addOutput('                ===========================');
+            addOutput('');
+            
+            // Create license key input
+            const licenseDiv = document.createElement('div');
+            licenseDiv.className = 'output';
+            licenseDiv.style.textAlign = 'center';
+            licenseDiv.style.marginTop = '20px';
+            licenseDiv.innerHTML = 'ENTER LICENSE KEY: <span id="license-key"></span><span class="cursor" style="display: inline-block; width: 10px; height: 16px; background-color: #0f0; animation: blink 1s infinite; vertical-align: middle;"></span>';
+            screen.appendChild(licenseDiv);
+            
+            const licenseKeySpan = document.getElementById('license-key');
+            let licenseKey = '';
+            
+            // Start scrolling names animation
+            const width = 80; // Screen width in characters
+            const names = [
+                "SVEN BOHNSTEDT - FRONTEND INTERFACE",
+                "PAUL POHL - CORE ANALYSIS ENGINE"
+            ];
+            
+            let positions = [0, -width/2]; // Start positions for each name
+            
+            // Create a line for scrolling text
+            const scrollLine = document.createElement('div');
+            scrollLine.className = 'output';
+            scrollLine.id = 'scrolling-line';
+            scrollLine.textContent = ' '.repeat(width);
+            screen.appendChild(scrollLine);
+            
+            // Animation loop with interval
+            const animationInterval = setInterval(() => {
+                // Update positions
+                positions[0] = (positions[0] + 1) % (width + names[0].length);
+                positions[1] = (positions[1] + 1) % (width + names[1].length);
+                
+                // Create the scrolling line with names at their current positions
+                let line = ' '.repeat(width);
+                
+                for (let i = 0; i < names.length; i++) {
+                    const name = names[i];
+                    const pos = Math.floor(positions[i]);
+                    
+                    // Only draw the name if it's at least partially on screen
+                    if (pos < width && pos + name.length > 0) {
+                        // Calculate visible portion of the name
+                        const startIdx = Math.max(0, -pos);
+                        const endIdx = Math.min(name.length, width - pos);
+                        const visiblePart = name.substring(startIdx, endIdx);
+                        
+                        // Calculate position in the line
+                        const linePos = Math.max(0, pos);
+                        
+                        // Insert the visible part into the line
+                        line = line.substring(0, linePos) + 
+                               visiblePart + 
+                               line.substring(linePos + visiblePart.length);
+                    }
+                }
+                
+                // Update the scrolling line
+                scrollLine.textContent = line;
+            }, 150);
+            
+            // Handle key presses for license key
+            const keyHandler = (event) => {
+                console.log("Key pressed:", event.key);
+                
+                if (event.key === 'Enter') {
+                    // Check if license key is correct
+                    if (licenseKey.toLowerCase() === 'wedel') {
+                        // Stop animation and remove key handler
+                        clearInterval(animationInterval);
+                        document.removeEventListener('keydown', keyHandler);
+                        
+                        // Show success message and start the analyzer
+                        licenseKeySpan.textContent = licenseKey + ' ✓';
+                        setTimeout(() => {
+                            startAnalyzer();
+                        }, 1000);
+                    } else {
+                        // Show error message and clear input
+                        licenseKeySpan.textContent = licenseKey + ' ✗';
+                        setTimeout(() => {
+                            licenseKey = '';
+                            licenseKeySpan.textContent = '';
+                        }, 1000);
+                    }
+                } else if (event.key === 'Backspace') {
+                    // Remove last character
+                    licenseKey = licenseKey.slice(0, -1);
+                    licenseKeySpan.textContent = licenseKey;
+                } else if (event.key.length === 1) {
+                    // Add character to license key
+                    licenseKey += event.key;
+                    licenseKeySpan.textContent = licenseKey;
+                }
+            };
+            
+            // Add key handler
+            document.addEventListener('keydown', keyHandler);
+            
+            console.log("Login screen setup completed");
+        }
+        
+        // Function to start the analyzer after successful login
+        function startAnalyzer() {
+            console.log("Starting analyzer...");
+            
+            // Clear any existing content
+            while (screen.children.length > 1) {
+                screen.removeChild(screen.children[1]);
+            }
+            
+            // Show welcome message
+            addOutput('');
+            addOutput('');
+            addOutput('                ACCESS GRANTED');
+            addOutput('                =============');
+            addOutput('');
+            addOutput('        Welcome to HTML Analyzer v1.0');
+            addOutput('');
+            
+            // Display available commands
+            addOutput('Available commands:');
+            addOutput('');
+            addOutput('1. analyze https://www.fh-wedel.de');
+            addOutput('2. analyze https://www.fh-wedel.de --modern');
+            addOutput('3. analyze https://www.fh-wedel.de --depth=2');
+            addOutput('4. analyze-report https://www.fh-wedel.de');
+            addOutput('');
+            addOutput('Type "run 1", "run 2", "run 3", "run 4" or enter the full command');
+            
+            // Create command input
+            const commandDiv = document.createElement('div');
+            commandDiv.className = 'output';
+            commandDiv.style.display = 'flex';
+            commandDiv.innerHTML = '> <span id="command-text"></span><span class="cursor" style="display: inline-block; width: 10px; height: 16px; background-color: #0f0; animation: blink 1s infinite; vertical-align: middle;"></span>';
+            screen.appendChild(commandDiv);
+            
+            const commandTextSpan = document.getElementById('command-text');
+            let commandText = '';
+            
+            // Handle key presses for commands
+            const commandHandler = (event) => {
+                console.log("Command key pressed:", event.key);
+                
+                if (pdfMode) {
+                    if (event.key === 'y' || event.key === 'Y') {
+                        generatePDF();
+                        addOutput('PDF generated and downloaded as fh-wedel.de-report.pdf');
+                        pdfMode = false;
+                    } else if (event.key === 'n' || event.key === 'N') {
+                        addOutput('PDF generation cancelled');
+                        pdfMode = false;
+                    }
+                    return;
+                }
+                
+                if (event.key === 'Enter') {
+                    // Process command
+                    processCommand(commandText);
+                    
+                    // Clear command
+                    commandText = '';
+                    commandTextSpan.textContent = '';
+                } else if (event.key === 'Backspace') {
+                    // Remove last character
+                    commandText = commandText.slice(0, -1);
+                    commandTextSpan.textContent = commandText;
+                } else if (event.key.length === 1) {
+                    // Add character to command
+                    commandText += event.key;
+                    commandTextSpan.textContent = commandText;
+                }
+            };
+            
+            // Add command handler
+            document.addEventListener('keydown', commandHandler);
+            
+            console.log("Analyzer started");
+        }
+        
+        // Function to create charts for PDF
+        function createCharts() {
+            if (!reportData) return;
+            
+            // Create tags distribution chart
+            const tagsCtx = document.getElementById('tagsChart').getContext('2d');
+            new Chart(tagsCtx, {
+                type: 'pie',
+                data: {
+                    labels: ['HTML Tags', 'Links', 'Images'],
+                    datasets: [{
+                        data: [reportData.tags, reportData.links, reportData.images],
+                        backgroundColor: [
+                            '#4e73df',
+                            '#1cc88a',
+                            '#36b9cc'
+                        ],
+                        borderColor: '#ffffff',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Element Distribution',
+                            color: '#333333',
+                            font: {
+                                size: 16
+                            }
+                        },
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+            
+            // Create files distribution chart
+            const filesCtx = document.getElementById('filesChart').getContext('2d');
+            new Chart(filesCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['CSS Files', 'JavaScript Files'],
+                    datasets: [{
+                        label: 'Number of Files',
+                        data: [reportData.css, reportData.js],
+                        backgroundColor: [
+                            '#f6c23e',
+                            '#e74a3b'
+                        ],
+                        borderColor: '#ffffff',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Resource Files',
+                            color: '#333333',
+                            font: {
+                                size: 16
+                            }
+                        },
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Function to generate enhanced PDF with tiles, charts and tables
+        async function generatePDF() {
+            if (!reportData) return;
+            
+            try {
+                // Create charts
+                createCharts();
+                
+                // Wait for charts to render
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                // Get chart canvases
+                const tagsChart = document.getElementById('tagsChart');
+                const filesChart = document.getElementById('filesChart');
+                
+                // Convert charts to images
+                const tagsChartImg = await html2canvas(tagsChart);
+                const filesChartImg = await html2canvas(filesChart);
+                
+                // Initialize jsPDF
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF({
+                    orientation: 'portrait',
+                    unit: 'mm',
+                    format: 'a4'
+                });
+                
+                // Define colors for the tiles
+                const colors = {
+                    primary: '#4e73df',
+                    success: '#1cc88a',
+                    info: '#36b9cc',
+                    warning: '#f6c23e',
+                    danger: '#e74a3b',
+                    secondary: '#858796',
+                    light: '#f8f9fc',
+                    dark: '#5a5c69'
+                };
+                
+                // Add header with logo-like element
+                doc.setFillColor(colors.dark);
+                doc.rect(0, 0, 210, 25, 'F');
+                doc.setTextColor(255, 255, 255);
+                doc.setFontSize(20);
+                doc.text('HTML ANALYZER', 105, 15, { align: 'center' });
+                
+                // Add report title
+                doc.setFillColor(colors.light);
+                doc.rect(0, 25, 210, 15, 'F');
+                doc.setTextColor(colors.dark);
+                doc.setFontSize(16);
+                doc.text('Analysis Report', 105, 35, { align: 'center' });
+                
+                // Add website info section
+                doc.setFillColor(255, 255, 255);
+                doc.rect(10, 45, 190, 20, 'F');
+                doc.setDrawColor(colors.primary);
+                doc.setLineWidth(0.5);
+                doc.rect(10, 45, 190, 20, 'S');
+                doc.setTextColor(colors.dark);
+                doc.setFontSize(12);
+                doc.text('Website:', 15, 53);
+                doc.setTextColor(colors.primary);
+                doc.text(reportData.url, 40, 53);
+                doc.setTextColor(colors.dark);
+                doc.text('Title:', 15, 60);
+                doc.setTextColor(colors.primary);
+                doc.text(reportData.title, 40, 60);
+                
+                // Add statistics tiles in a 2x3 grid layout
+                const tileWidth = 90;
+                const tileHeight = 25;
+                const tilesPerRow = 2;
+                const tileMargin = 10;
+                const startY = 70;
+                
+                // Tile data - organized in a 2x3 grid
+                const tiles = [
+                    { label: 'HTML Tags', value: reportData.tags.toLocaleString(), color: colors.primary },
+                    { label: 'Words', value: reportData.words.toLocaleString(), color: colors.success },
+                    { label: 'Links', value: reportData.links.toLocaleString(), color: colors.info },
+                    { label: 'Images', value: reportData.images.toLocaleString(), color: colors.warning },
+                    { label: 'CSS Files', value: reportData.css.toLocaleString(), color: colors.danger },
+                    { label: 'JS Files', value: reportData.js.toLocaleString(), color: colors.secondary }
+                ];
+                
+                // Draw tiles in a 2x3 grid
+                tiles.forEach((tile, index) => {
+                    const row = Math.floor(index / tilesPerRow);
+                    const col = index % tilesPerRow;
+                    const x = 10 + col * (tileWidth + tileMargin);
+                    const y = startY + row * (tileHeight + tileMargin);
+                    
+                    // Draw tile background
+                    doc.setFillColor(255, 255, 255);
+                    doc.rect(x, y, tileWidth, tileHeight, 'F');
+                    
+                    // Draw colored header
+                    doc.setFillColor(tile.color);
+                    doc.rect(x, y, tileWidth, 7, 'F');
+                    
+                    // Draw border
+                    doc.setDrawColor(tile.color);
+                    doc.setLineWidth(0.5);
+                    doc.rect(x, y, tileWidth, tileHeight, 'S');
+                    
+                    // Add label
+                    doc.setTextColor(255, 255, 255);
+                    doc.setFontSize(8);
+                    doc.text(tile.label, x + 5, y + 5);
+                    
+                    // Add value
+                    doc.setTextColor(colors.dark);
+                    doc.setFontSize(14);
+                    doc.text(tile.value, x + tileWidth / 2, y + 17, { align: 'center' });
+                });
+                
+                // Add size information in a special tile
+                const sizeY = startY + 3 * (tileHeight + tileMargin);
+                doc.setFillColor(255, 255, 255);
+                doc.rect(10, sizeY, 190, tileHeight, 'F');
+                doc.setDrawColor(colors.dark);
+                doc.setLineWidth(0.5);
+                doc.rect(10, sizeY, 190, tileHeight, 'S');
+                doc.setFillColor(colors.dark);
+                doc.rect(10, sizeY, 190, 7, 'F');
+                doc.setTextColor(255, 255, 255);
+                doc.setFontSize(8);
+                doc.text('Size Information', 15, sizeY + 5);
+                doc.setTextColor(colors.dark);
+                doc.setFontSize(12);
+                doc.text(`Total Size: ${(reportData.size / 1024).toFixed(1)} KB`, 105, sizeY + 17, { align: 'center' });
+                
+                // Add charts
+                const chartsY = sizeY + tileHeight + 15;
+                doc.addImage(tagsChartImg.toDataURL(), 'PNG', 10, chartsY, 90, 70);
+                doc.addImage(filesChartImg.toDataURL(), 'PNG', 110, chartsY, 90, 70);
+                
+                // Add table with detailed statistics
+                const tableY = chartsY + 80;
+                doc.setFillColor(colors.primary);
+                doc.rect(10, tableY, 190, 10, 'F');
+                doc.setTextColor(255, 255, 255);
+                doc.setFontSize(12);
+                doc.text('Detailed Statistics', 105, tableY + 7, { align: 'center' });
+                
+                // Table headers
+                const tableHeaders = ['Metric', 'Value', 'Percentage'];
+                const colWidths = [70, 60, 60];
+                doc.setFillColor(colors.light);
+                doc.rect(10, tableY + 10, 190, 8, 'F');
+                doc.setTextColor(colors.dark);
+                doc.setFontSize(10);
+                doc.text(tableHeaders[0], 15, tableY + 16);
+                doc.text(tableHeaders[1], 85, tableY + 16);
+                doc.text(tableHeaders[2], 145, tableY + 16);
+                
+                // Table rows
+                const tableData = [
+                    { metric: 'HTML Tags', value: reportData.tags, percentage: '100%' },
+                    { metric: 'Links', value: reportData.links, percentage: `${(reportData.links / reportData.tags * 100).toFixed(1)}%` },
+                    { metric: 'Images', value: reportData.images, percentage: `${(reportData.images / reportData.tags * 100).toFixed(1)}%` },
+                    { metric: 'CSS Files', value: reportData.css, percentage: `${(reportData.css / (reportData.css + reportData.js) * 100).toFixed(1)}%` },
+                    { metric: 'JS Files', value: reportData.js, percentage: `${(reportData.js / (reportData.css + reportData.js) * 100).toFixed(1)}%` }
+                ];
+                
+                tableData.forEach((row, index) => {
+                    const rowY = tableY + 18 + index * 8;
+                    if (index % 2 === 0) {
+                        doc.setFillColor(245, 245, 245);
+                        doc.rect(10, rowY, 190, 8, 'F');
+                    }
+                    doc.setTextColor(colors.dark);
+                    doc.setFontSize(9);
+                    doc.text(row.metric, 15, rowY + 6);
+                    doc.text(row.value.toString(), 85, rowY + 6);
+                    doc.text(row.percentage, 145, rowY + 6);
+                });
+                
+                // Add footer
+                doc.setFillColor(colors.dark);
+                doc.rect(0, 280, 210, 17, 'F');
+                doc.setTextColor(255, 255, 255);
+                doc.setFontSize(10);
+                doc.text('Generated by HTML Analyzer v1.0', 105, 287, { align: 'center' });
+                doc.setFontSize(8);
+                doc.text(`Date: ${new Date().toLocaleString()}`, 105, 293, { align: 'center' });
+                
+                // Save the PDF
+                doc.save("fh-wedel.de-report.pdf");
+            } catch (error) {
+                console.error("Error generating PDF:", error);
+                addOutput("Error generating PDF: " + error.message);
+            }
+        }
+        
+        // Function to process commands
+        function processCommand(command) {
+            console.log("Processing command:", command);
+            
+            // Add command to output
+            addOutput('> ' + command);
+            
+            // Process command
+            if (command.toLowerCase() === 'run 1' || command.toLowerCase() === 'analyze https://www.fh-wedel.de') {
+                addOutput('Analyzing FH Wedel website...');
+                setTimeout(() => {
+                    addOutput('Analysis complete!');
+                    addOutput('');
+                    addOutput('=== HTML Analysis for https://www.fh-wedel.de ===');
+                    addOutput('Title: Die Fachhochschule Wedel bei Hamburg');
+                    addOutput('Number of tags: 1583');
+                    addOutput('Number of words: 2620');
+                    addOutput('Size in bytes: 143103');
+                    addOutput('Number of links: 233');
+                    addOutput('Number of images: 53');
+                    addOutput('Number of CSS files: 5');
+                    addOutput('Number of JavaScript files: 30');
+                }, 2000);
+            } else if (command.toLowerCase() === 'run 2' || command.toLowerCase() === 'analyze https://www.fh-wedel.de --modern') {
+                addOutput('Analyzing FH Wedel website with modern dashboard...');
+                setTimeout(() => {
+                    addOutput('Analysis complete!');
+                    addOutput('');
+                    addOutput('┌─────────────────────────────────────────────────────┐');
+                    addOutput('│           DASHBOARD: FH Wedel Website               │');
+                    addOutput('│                                                     │');
+                    addOutput('├─────────────────┬─────────────────────────────────┤');
+                    addOutput('│ 🏷️ Tags: 1,583   │ 📝 Words: 2,620                 │');
+                    addOutput('├─────────────────┼─────────────────────────────────┤');
+                    addOutput('│ 🔗 Links: 233    │ 🖼️ Images: 53                   │');
+                    addOutput('├─────────────────┼─────────────────────────────────┤');
+                    addOutput('│ 🎨 CSS: 5        │ ⚙️ JS Files: 30                 │');
+                    addOutput('├─────────────────┼─────────────────────────────────┤');
+                    addOutput('│ 📦 Size: 143.1 KB│ ⏱️ Load Time: 0.76 s            │');
+                    addOutput('└─────────────────┴─────────────────────────────────┘');
+                }, 2000);
+            } else if (command.toLowerCase() === 'run 3' || command.toLowerCase() === 'analyze https://www.fh-wedel.de --depth=2') {
+                addOutput('Running deep analysis on FH Wedel website...');
+                setTimeout(() => {
+                    addOutput('Deep analysis complete!');
+                    addOutput('');
+                    addOutput('=== Deep Analysis for https://www.fh-wedel.de ===');
+                    addOutput('Recursion depth: 2');
+                    addOutput('Pages analyzed: 25');
+                    addOutput('Total tags: 32,583');
+                    addOutput('Total words: 48,750');
+                    addOutput('Total size: 3.2 MB');
+                    addOutput('Total links: 1,842');
+                    addOutput('Total images: 187');
+                    addOutput('Total CSS files: 12');
+                    addOutput('Total JavaScript files: 42');
+                    addOutput('');
+                    addOutput('Most common tags: div (8,543), a (5,721), span (4,532)');
+                    addOutput('Average page size: 131.2 KB');
+                }, 3000);
+            } else if (command.toLowerCase() === 'run 4' || command.toLowerCase() === 'analyze-report https://www.fh-wedel.de') {
+                addOutput('Generating HTML report for FH Wedel...');
+                setTimeout(() => {
+                    // Store report data for PDF generation
+                    reportData = {
+                        url: 'https://www.fh-wedel.de',
+                        title: 'Die Fachhochschule Wedel bei Hamburg',
+                        tags: 1583,
+                        words: 2620,
+                        size: 143103,
+                        links: 233,
+                        images: 53,
+                        css: 5,
+                        js: 30
+                    };
+                    
+                    addOutput('Report generated!');
+                    addOutput('');
+                    addOutput('=== HTML Report for https://www.fh-wedel.de ===');
+                    addOutput('Title: Die Fachhochschule Wedel bei Hamburg');
+                    addOutput('Number of tags: 1583');
+                    addOutput('Number of words: 2620');
+                    addOutput('Size in bytes: 143103');
+                    addOutput('Number of links: 233');
+                    addOutput('Number of images: 53');
+                    addOutput('Number of CSS files: 5');
+                    addOutput('Number of JavaScript files: 30');
+                    addOutput('');
+                    addOutput('Report saved as fh-wedel.de-report.html');
+                    addOutput('');
+                    addOutput('Would you like to download a PDF version? (y/n)');
+                    
+                    // Enable PDF mode to capture y/n response
+                    pdfMode = true;
+                }, 2000);
+            } else {
+                addOutput('Unknown command: ' + command);
+                addOutput('Type "run 1", "run 2", "run 3", "run 4" or enter the full command');
+            }
+        }
+        
+        // Function to simulate boot sequence
+        async function bootSequence() {
+            console.log("Boot sequence started");
+            
+            // Clear any existing content
+            while (screen.children.length > 1) {
+                screen.removeChild(screen.children[1]);
+            }
+            
+            // Add boot messages with delays
+            const bootMessages = [
+                // BIOS and hardware detection
+                "Starting 80486DX/33 BIOS v2.0...",
+                "Memory Test: 640K Base, 15360K Extended",
+                "Detecting Floppy Disk Drives...",
+                "Floppy Disk Drive A: 1.44M",
+                "Floppy Disk Drive B: 1.44M",
+                "Detecting Hard Drives...",
+                "Primary Master: Quantum Fireball 850MB",
+                "Loading MS-DOS 6.22...",
+                "",
+                // DOS drivers
+                "HIMEM.SYS loaded - High Memory Manager v3.10",
+                "EMM386.EXE loaded - Expanded Memory Manager v4.49",
+                "MOUSE.COM loaded - Microsoft Mouse Driver v9.1",
+                "",
+                // Linux boot sequence
+                "Booting Linux Kernel 2.6.32...",
+                "CPU: Intel(R) 80486DX/33 stepping 02",
+                "BIOS-provided physical RAM map:",
+                "  BIOS-e820: 0000000000000000 - 000000000009fc00 (usable)",
+                "  BIOS-e820: 000000000009fc00 - 00000000000a0000 (reserved)",
+                "  BIOS-e820: 00000000000f0000 - 0000000000100000 (reserved)",
+                "  BIOS-e820: 0000000000100000 - 0000000010000000 (usable)",
+                "  BIOS-e820: 00000000ffff0000 - 0000000100000000 (reserved)",
+                "Console: colour VGA+ 80x25",
+                "Checking if this processor honours the WP bit even in supervisor mode... Ok.",
+                "Initializing cgroup subsys cpuset",
+                "Initializing cgroup subsys cpu",
+                "Linux version 2.6.32 (gcc version 4.4.3)",
+                "Command line: ro root=UUID=f5d1c298-c328-4e5c-9b0e-7e6d2f5f5c5f",
+                "Kernel command line: ro root=UUID=f5d1c298-c328-4e5c-9b0e-7e6d2f5f5c5f",
+                "PID hash table entries: 4096 (order: 2, 16384 bytes)",
+                "Dentry cache hash table entries: 65536 (order: 6, 262144 bytes)",
+                "Inode-cache hash table entries: 32768 (order: 5, 131072 bytes)",
+                "Memory: 255MB = 255MB total",
+                "Memory: 252MB available (2252k kernel code, 148k absent, 2600k reserved)",
+                "Calibrating delay loop... 66.56 BogoMIPS",
+                "Mount-cache hash table entries: 512",
+                "CPU: Intel 80486DX stepping 02",
+                "Checking 'hlt' instruction... OK.",
+                "Initializing CPU#0",
+                "Brought up 1 CPUs",
+                "devtmpfs: initialized",
+                "NET: Registered protocol family 16",
+                "ACPI: Interpreter disabled.",
+                "io scheduler noop registered",
+                "io scheduler deadline registered (default)",
+                "io scheduler cfq registered",
+                "Serial: 8250/16550 driver, 4 ports, IRQ sharing enabled",
+                "serial8250: ttyS0 at I/O 0x3f8 (irq = 4) is a 16550A",
+                "serial8250: ttyS1 at I/O 0x2f8 (irq = 3) is a 16550A",
+                "RAMDISK: Compressed image found at block 0",
+                "VFS: Mounted root (ext4 filesystem) readonly on device 1:0.",
+                "Freeing unused kernel memory: 340k freed",
+                "Starting init: /sbin/init exists",
+                "",
+                // HTML Analyzer components
+                "Loading HTML Analyzer Components...",
+                "JSOUP.DLL loaded - HTML Parser Engine v1.14.3",
+                "CRAWLER.SYS loaded - Web Crawler Module v2.3",
+                "ANALYZER.EXE loaded - HTML Analysis Core v1.0",
+                "DASHBOARD.DLL loaded - Visualization Module v1.2",
+                "",
+                // Engineer credits
+                "Loading Engineer Credits...",
+                "PAUL.POHL - Core Analysis Engine",
+                "SVEN.BOHNSTEDT - Frontend Interface",
+                "",
+                "Starting security system..."
+            ];
+            
+            // Add each message with a delay
+            for (const message of bootMessages) {
+                await new Promise(resolve => setTimeout(resolve, 100));
+                addOutput(message);
+                screen.scrollTop = screen.scrollHeight;
+            }
+            
+            console.log("Boot sequence completed");
+            
+            // Wait 5 seconds before showing the login screen
+            addOutput('');
+            addOutput('System initialized. Starting login screen in 5 seconds...');
+            await new Promise(resolve => setTimeout(resolve, 5000));
+            
+            // Show the login screen
+            showLoginScreen();
+        }
+    </script>
+</body>
+</html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HTML Analyzer ASCII Frontend</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        body {
+            background-color: #000;
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            padding: 20px;
+            overflow: hidden;
+        }
+        
+        .monitor {
+            border: 2px solid #444;
+            border-radius: 10px;
+            padding: 20px;
+            background-color: #111;
+            width: 800px;
+            position: relative;
+        }
+        
+        .screen {
+            background-color: #000;
+            border: 2px solid #333;
+            border-radius: 5px;
+            padding: 15px;
+            height: 400px;
+            overflow-y: auto;
+            margin-bottom: 10px;
+            font-size: 16px;
+            position: relative;
+        }
+        
+        .output {
+            color: #0f0;
+            margin: 5px 0;
+            word-wrap: break-word;
+        }
+        
+        .scanline {
+            width: 100%;
+            height: 2px;
+            background-color: rgba(0, 255, 0, 0.1);
+            position: absolute;
+            top: 0;
+            left: 0;
+            animation: scanline 6s linear infinite;
+            pointer-events: none;
+        }
+        
+        @keyframes scanline {
+            0% { top: 0; }
+            100% { top: 100%; }
+        }
+        
+        /* Hide scrollbar */
+        .screen::-webkit-scrollbar {
+            width: 0;
+            background: transparent;
+        }
+
+        @keyframes blink {
+            0% { opacity: 1; }
+            50% { opacity: 0; }
+            100% { opacity: 1; }
+        }
+        
+        /* Hidden chart containers for PDF generation */
+        .chart-container {
+            display: none;
+            width: 400px;
+            height: 300px;
+        }
+    </style>
+</head>
+<body>
+    <div class="monitor">
+        <div class="screen" id="screen">
+            <div class="scanline"></div>
+            <div class="output">HTML Analyzer Terminal v1.0</div>
+        </div>
+    </div>
+    
+    <!-- Hidden chart containers for PDF generation -->
+    <div id="charts-container" style="display: none;">
+        <div class="chart-container">
+            <canvas id="tagsChart"></canvas>
+        </div>
+        <div class="chart-container">
+            <canvas id="filesChart"></canvas>
+        </div>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log("DOM loaded, starting boot sequence...");
+            bootSequence();
+        });
+        
+        const screen = document.getElementById('screen');
+        let pdfMode = false;
+        let reportData = null;
+        
+        // Function to add output to the screen
+        function addOutput(text) {
+            const output = document.createElement('div');
+            output.className = 'output';
+            output.textContent = text;
+            screen.appendChild(output);
+            screen.scrollTop = screen.scrollHeight;
+        }
+        
+        // Function to display scrolling names and login screen
+        async function showLoginScreen() {
+            console.log("Starting login screen...");
+            
+            // Clear any existing content
+            while (screen.children.length > 1) {
+                screen.removeChild(screen.children[1]);
+            }
+            
+            // Add lock screen header
+            addOutput('');
+            addOutput('');
+            addOutput('                HTML ANALYZER SECURITY SYSTEM');
+            addOutput('                ===========================');
+            addOutput('');
+            
+            // Create license key input
+            const licenseDiv = document.createElement('div');
+            licenseDiv.className = 'output';
+            licenseDiv.style.textAlign = 'center';
+            licenseDiv.style.marginTop = '20px';
+            licenseDiv.innerHTML = 'ENTER LICENSE KEY: <span id="license-key"></span><span class="cursor" style="display: inline-block; width: 10px; height: 16px; background-color: #0f0; animation: blink 1s infinite; vertical-align: middle;"></span>';
+            screen.appendChild(licenseDiv);
+            
+            const licenseKeySpan = document.getElementById('license-key');
+            let licenseKey = '';
+            
+            // Start scrolling names animation
+            const width = 80; // Screen width in characters
+            const names = [
+                "SVEN BOHNSTEDT - FRONTEND INTERFACE",
+                "PAUL POHL - CORE ANALYSIS ENGINE"
+            ];
+            
+            let positions = [0, -width/2]; // Start positions for each name
+            
+            // Create a line for scrolling text
+            const scrollLine = document.createElement('div');
+            scrollLine.className = 'output';
+            scrollLine.id = 'scrolling-line';
+            scrollLine.textContent = ' '.repeat(width);
+            screen.appendChild(scrollLine);
+            
+            // Animation loop with interval
+            const animationInterval = setInterval(() => {
+                // Update positions
+                positions[0] = (positions[0] + 1) % (width + names[0].length);
+                positions[1] = (positions[1] + 1) % (width + names[1].length);
+                
+                // Create the scrolling line with names at their current positions
+                let line = ' '.repeat(width);
+                
+                for (let i = 0; i < names.length; i++) {
+                    const name = names[i];
+                    const pos = Math.floor(positions[i]);
+                    
+                    // Only draw the name if it's at least partially on screen
+                    if (pos < width && pos + name.length > 0) {
+                        // Calculate visible portion of the name
+                        const startIdx = Math.max(0, -pos);
+                        const endIdx = Math.min(name.length, width - pos);
+                        const visiblePart = name.substring(startIdx, endIdx);
+                        
+                        // Calculate position in the line
+                        const linePos = Math.max(0, pos);
+                        
+                        // Insert the visible part into the line
+                        line = line.substring(0, linePos) + 
+                               visiblePart + 
+                               line.substring(linePos + visiblePart.length);
+                    }
+                }
+                
+                // Update the scrolling line
+                scrollLine.textContent = line;
+            }, 150);
+            
+            // Handle key presses for license key
+            const keyHandler = (event) => {
+                console.log("Key pressed:", event.key);
+                
+                if (event.key === 'Enter') {
+                    // Check if license key is correct
+                    if (licenseKey.toLowerCase() === 'wedel') {
+                        // Stop animation and remove key handler
+                        clearInterval(animationInterval);
+                        document.removeEventListener('keydown', keyHandler);
+                        
+                        // Show success message and start the analyzer
+                        licenseKeySpan.textContent = licenseKey + ' ✓';
+                        setTimeout(() => {
+                            startAnalyzer();
+                        }, 1000);
+                    } else {
+                        // Show error message and clear input
+                        licenseKeySpan.textContent = licenseKey + ' ✗';
+                        setTimeout(() => {
+                            licenseKey = '';
+                            licenseKeySpan.textContent = '';
+                        }, 1000);
+                    }
+                } else if (event.key === 'Backspace') {
+                    // Remove last character
+                    licenseKey = licenseKey.slice(0, -1);
+                    licenseKeySpan.textContent = licenseKey;
+                } else if (event.key.length === 1) {
+                    // Add character to license key
+                    licenseKey += event.key;
+                    licenseKeySpan.textContent = licenseKey;
+                }
+            };
+            
+            // Add key handler
+            document.addEventListener('keydown', keyHandler);
+            
+            console.log("Login screen setup completed");
+        }
+        
+        // Function to start the analyzer after successful login
+        function startAnalyzer() {
+            console.log("Starting analyzer...");
+            
+            // Clear any existing content
+            while (screen.children.length > 1) {
+                screen.removeChild(screen.children[1]);
+            }
+            
+            // Show welcome message
+            addOutput('');
+            addOutput('');
+            addOutput('                ACCESS GRANTED');
+            addOutput('                =============');
+            addOutput('');
+            addOutput('        Welcome to HTML Analyzer v1.0');
+            addOutput('');
+            
+            // Display available commands
+            addOutput('Available commands:');
+            addOutput('');
+            addOutput('1. analyze https://www.fh-wedel.de');
+            addOutput('2. analyze https://www.fh-wedel.de --modern');
+            addOutput('3. analyze https://www.fh-wedel.de --depth=2');
+            addOutput('4. analyze-report https://www.fh-wedel.de');
+            addOutput('');
+            addOutput('Type "run 1", "run 2", "run 3", "run 4" or enter the full command');
+            
+            // Create command input
+            const commandDiv = document.createElement('div');
+            commandDiv.className = 'output';
+            commandDiv.style.display = 'flex';
+            commandDiv.innerHTML = '> <span id="command-text"></span><span class="cursor" style="display: inline-block; width: 10px; height: 16px; background-color: #0f0; animation: blink 1s infinite; vertical-align: middle;"></span>';
+            screen.appendChild(commandDiv);
+            
+            const commandTextSpan = document.getElementById('command-text');
+            let commandText = '';
+            
+            // Handle key presses for commands
+            const commandHandler = (event) => {
+                console.log("Command key pressed:", event.key);
+                
+                if (pdfMode) {
+                    if (event.key === 'y' || event.key === 'Y') {
+                        generatePDF();
+                        addOutput('PDF generated and downloaded as fh-wedel.de-report.pdf');
+                        pdfMode = false;
+                    } else if (event.key === 'n' || event.key === 'N') {
+                        addOutput('PDF generation cancelled');
+                        pdfMode = false;
+                    }
+                    return;
+                }
+                
+                if (event.key === 'Enter') {
+                    // Process command
+                    processCommand(commandText);
+                    
+                    // Clear command
+                    commandText = '';
+                    commandTextSpan.textContent = '';
+                } else if (event.key === 'Backspace') {
+                    // Remove last character
+                    commandText = commandText.slice(0, -1);
+                    commandTextSpan.textContent = commandText;
+                } else if (event.key.length === 1) {
+                    // Add character to command
+                    commandText += event.key;
+                    commandTextSpan.textContent = commandText;
+                }
+            };
+            
+            // Add command handler
+            document.addEventListener('keydown', commandHandler);
+            
+            console.log("Analyzer started");
+        }
+        
+        // Function to create charts for PDF
+        function createCharts() {
+            if (!reportData) return;
+            
+            // Create tags distribution chart
+            const tagsCtx = document.getElementById('tagsChart').getContext('2d');
+            new Chart(tagsCtx, {
+                type: 'pie',
+                data: {
+                    labels: ['HTML Tags', 'Links', 'Images'],
+                    datasets: [{
+                        data: [reportData.tags, reportData.links, reportData.images],
+                        backgroundColor: [
+                            '#4e73df',
+                            '#1cc88a',
+                            '#36b9cc'
+                        ],
+                        borderColor: '#ffffff',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Element Distribution',
+                            color: '#333333',
+                            font: {
+                                size: 16
+                            }
+                        },
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+            
+            // Create files distribution chart
+            const filesCtx = document.getElementById('filesChart').getContext('2d');
+            new Chart(filesCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['CSS Files', 'JavaScript Files'],
+                    datasets: [{
+                        label: 'Number of Files',
+                        data: [reportData.css, reportData.js],
+                        backgroundColor: [
+                            '#f6c23e',
+                            '#e74a3b'
+                        ],
+                        borderColor: '#ffffff',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Resource Files',
+                            color: '#333333',
+                            font: {
+                                size: 16
+                            }
+                        },
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Function to generate enhanced PDF with tiles, charts and tables
+        async function generatePDF() {
+            if (!reportData) return;
+            
+            try {
+                // Create charts
+                createCharts();
+                
+                // Wait for charts to render
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                // Get chart canvases
+                const tagsChart = document.getElementById('tagsChart');
+                const filesChart = document.getElementById('filesChart');
+                
+                // Convert charts to images
+                const tagsChartImg = await html2canvas(tagsChart);
+                const filesChartImg = await html2canvas(filesChart);
+                
+                // Initialize jsPDF
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF({
+                    orientation: 'portrait',
+                    unit: 'mm',
+                    format: 'a4'
+                });
+                
+                // Define colors for the tiles
+                const colors = {
+                    primary: '#4e73df',
+                    success: '#1cc88a',
+                    info: '#36b9cc',
+                    warning: '#f6c23e',
+                    danger: '#e74a3b',
+                    secondary: '#858796',
+                    light: '#f8f9fc',
+                    dark: '#5a5c69'
+                };
+                
+                // Add header with logo-like element
+                doc.setFillColor(colors.dark);
+                doc.rect(0, 0, 210, 25, 'F');
+                doc.setTextColor(255, 255, 255);
+                doc.setFontSize(20);
+                doc.text('HTML ANALYZER', 105, 15, { align: 'center' });
+                
+                // Add report title
+                doc.setFillColor(colors.light);
+                doc.rect(0, 25, 210, 15, 'F');
+                doc.setTextColor(colors.dark);
+                doc.setFontSize(16);
+                doc.text('Analysis Report', 105, 35, { align: 'center' });
+                
+                // Add website info section
+                doc.setFillColor(255, 255, 255);
+                doc.rect(10, 45, 190, 20, 'F');
+                doc.setDrawColor(colors.primary);
+                doc.setLineWidth(0.5);
+                doc.rect(10, 45, 190, 20, 'S');
+                doc.setTextColor(colors.dark);
+                doc.setFontSize(12);
+                doc.text('Website:', 15, 53);
+                doc.setTextColor(colors.primary);
+                doc.text(reportData.url, 40, 53);
+                doc.setTextColor(colors.dark);
+                doc.text('Title:', 15, 60);
+                doc.setTextColor(colors.primary);
+                doc.text(reportData.title, 40, 60);
+                
+                // Add statistics tiles in a 2x3 grid layout
+                const tileWidth = 90;
+                const tileHeight = 25;
+                const tilesPerRow = 2;
+                const tileMargin = 10;
+                const startY = 70;
+                
+                // Tile data - organized in a 2x3 grid
+                const tiles = [
+                    { label: 'HTML Tags', value: reportData.tags.toLocaleString(), color: colors.primary },
+                    { label: 'Words', value: reportData.words.toLocaleString(), color: colors.success },
+                    { label: 'Links', value: reportData.links.toLocaleString(), color: colors.info },
+                    { label: 'Images', value: reportData.images.toLocaleString(), color: colors.warning },
+                    { label: 'CSS Files', value: reportData.css.toLocaleString(), color: colors.danger },
+                    { label: 'JS Files', value: reportData.js.toLocaleString(), color: colors.secondary }
+                ];
+                
+                // Draw tiles in a 2x3 grid
+                tiles.forEach((tile, index) => {
+                    const row = Math.floor(index / tilesPerRow);
+                    const col = index % tilesPerRow;
+                    const x = 10 + col * (tileWidth + tileMargin);
+                    const y = startY + row * (tileHeight + tileMargin);
+                    
+                    // Draw tile background
+                    doc.setFillColor(255, 255, 255);
+                    doc.rect(x, y, tileWidth, tileHeight, 'F');
+                    
+                    // Draw colored header
+                    doc.setFillColor(tile.color);
+                    doc.rect(x, y, tileWidth, 7, 'F');
+                    
+                    // Draw border
+                    doc.setDrawColor(tile.color);
+                    doc.setLineWidth(0.5);
+                    doc.rect(x, y, tileWidth, tileHeight, 'S');
+                    
+                    // Add label
+                    doc.setTextColor(255, 255, 255);
+                    doc.setFontSize(8);
+                    doc.text(tile.label, x + 5, y + 5);
+                    
+                    // Add value
+                    doc.setTextColor(colors.dark);
+                    doc.setFontSize(14);
+                    doc.text(tile.value, x + tileWidth / 2, y + 17, { align: 'center' });
+                });
+                
+                // Add size information in a special tile
+                const sizeY = startY + 3 * (tileHeight + tileMargin);
+                doc.setFillColor(255, 255, 255);
+                doc.rect(10, sizeY, 190, tileHeight, 'F');
+                doc.setDrawColor(colors.dark);
+                doc.setLineWidth(0.5);
+                doc.rect(10, sizeY, 190, tileHeight, 'S');
+                doc.setFillColor(colors.dark);
+                doc.rect(10, sizeY, 190, 7, 'F');
+                doc.setTextColor(255, 255, 255);
+                doc.setFontSize(8);
+                doc.text('Size Information', 15, sizeY + 5);
+                doc.setTextColor(colors.dark);
+                doc.setFontSize(12);
+                doc.text(`Total Size: ${(reportData.size / 1024).toFixed(1)} KB`, 105, sizeY + 17, { align: 'center' });
+                
+                // Add charts
+                const chartsY = sizeY + tileHeight + 15;
+                doc.addImage(tagsChartImg.toDataURL(), 'PNG', 10, chartsY, 90, 70);
+                doc.addImage(filesChartImg.toDataURL(), 'PNG', 110, chartsY, 90, 70);
+                
+                // Add table with detailed statistics
+                const tableY = chartsY + 80;
+                doc.setFillColor(colors.primary);
+                doc.rect(10, tableY, 190, 10, 'F');
+                doc.setTextColor(255, 255, 255);
+                doc.setFontSize(12);
+                doc.text('Detailed Statistics', 105, tableY + 7, { align: 'center' });
+                
+                // Table headers
+                const tableHeaders = ['Metric', 'Value', 'Percentage'];
+                const colWidths = [70, 60, 60];
+                doc.setFillColor(colors.light);
+                doc.rect(10, tableY + 10, 190, 8, 'F');
+                doc.setTextColor(colors.dark);
+                doc.setFontSize(10);
+                doc.text(tableHeaders[0], 15, tableY + 16);
+                doc.text(tableHeaders[1], 85, tableY + 16);
+                doc.text(tableHeaders[2], 145, tableY + 16);
+                
+                // Table rows
+                const tableData = [
+                    { metric: 'HTML Tags', value: reportData.tags, percentage: '100%' },
+                    { metric: 'Links', value: reportData.links, percentage: `${(reportData.links / reportData.tags * 100).toFixed(1)}%` },
+                    { metric: 'Images', value: reportData.images, percentage: `${(reportData.images / reportData.tags * 100).toFixed(1)}%` },
+                    { metric: 'CSS Files', value: reportData.css, percentage: `${(reportData.css / (reportData.css + reportData.js) * 100).toFixed(1)}%` },
+                    { metric: 'JS Files', value: reportData.js, percentage: `${(reportData.js / (reportData.css + reportData.js) * 100).toFixed(1)}%` }
+                ];
+                
+                tableData.forEach((row, index) => {
+                    const rowY = tableY + 18 + index * 8;
+                    if (index % 2 === 0) {
+                        doc.setFillColor(245, 245, 245);
+                        doc.rect(10, rowY, 190, 8, 'F');
+                    }
+                    doc.setTextColor(colors.dark);
+                    doc.setFontSize(9);
+                    doc.text(row.metric, 15, rowY + 6);
+                    doc.text(row.value.toString(), 85, rowY + 6);
+                    doc.text(row.percentage, 145, rowY + 6);
+                });
+                
+                // Add footer
+                doc.setFillColor(colors.dark);
+                doc.rect(0, 280, 210, 17, 'F');
+                doc.setTextColor(255, 255, 255);
+                doc.setFontSize(10);
+                doc.text('Generated by HTML Analyzer v1.0', 105, 287, { align: 'center' });
+                doc.setFontSize(8);
+                doc.text(`Date: ${new Date().toLocaleString()}`, 105, 293, { align: 'center' });
+                
+                // Save the PDF
+                doc.save("fh-wedel.de-report.pdf");
+            } catch (error) {
+                console.error("Error generating PDF:", error);
+                addOutput("Error generating PDF: " + error.message);
+            }
+        }
+        
+        // Function to process commands
+        function processCommand(command) {
+            console.log("Processing command:", command);
+            
+            // Add command to output
+            addOutput('> ' + command);
+            
+            // Process command
+            if (command.toLowerCase() === 'run 1' || command.toLowerCase() === 'analyze https://www.fh-wedel.de') {
+                addOutput('Analyzing FH Wedel website...');
+                setTimeout(() => {
+                    addOutput('Analysis complete!');
+                    addOutput('');
+                    addOutput('=== HTML Analysis for https://www.fh-wedel.de ===');
+                    addOutput('Title: Die Fachhochschule Wedel bei Hamburg');
+                    addOutput('Number of tags: 1583');
+                    addOutput('Number of words: 2620');
+                    addOutput('Size in bytes: 143103');
+                    addOutput('Number of links: 233');
+                    addOutput('Number of images: 53');
+                    addOutput('Number of CSS files: 5');
+                    addOutput('Number of JavaScript files: 30');
+                }, 2000);
+            } else if (command.toLowerCase() === 'run 2' || command.toLowerCase() === 'analyze https://www.fh-wedel.de --modern') {
+                addOutput('Analyzing FH Wedel website with modern dashboard...');
+                setTimeout(() => {
+                    addOutput('Analysis complete!');
+                    addOutput('');
+                    addOutput('┌─────────────────────────────────────────────────────┐');
+                    addOutput('│           DASHBOARD: FH Wedel Website               │');
+                    addOutput('│                                                     │');
+                    addOutput('├─────────────────┬─────────────────────────────────┤');
+                    addOutput('│ 🏷️ Tags: 1,583   │ 📝 Words: 2,620                 │');
+                    addOutput('├─────────────────┼─────────────────────────────────┤');
+                    addOutput('│ 🔗 Links: 233    │ 🖼️ Images: 53                   │');
+                    addOutput('├─────────────────┼─────────────────────────────────┤');
+                    addOutput('│ 🎨 CSS: 5        │ ⚙️ JS Files: 30                 │');
+                    addOutput('├─────────────────┼─────────────────────────────────┤');
+                    addOutput('│ 📦 Size: 143.1 KB│ ⏱️ Load Time: 0.76 s            │');
+                    addOutput('└─────────────────┴─────────────────────────────────┘');
+                }, 2000);
+            } else if (command.toLowerCase() === 'run 3' || command.toLowerCase() === 'analyze https://www.fh-wedel.de --depth=2') {
+                addOutput('Running deep analysis on FH Wedel website...');
+                setTimeout(() => {
+                    addOutput('Deep analysis complete!');
+                    addOutput('');
+                    addOutput('=== Deep Analysis for https://www.fh-wedel.de ===');
+                    addOutput('Recursion depth: 2');
+                    addOutput('Pages analyzed: 25');
+                    addOutput('Total tags: 32,583');
+                    addOutput('Total words: 48,750');
+                    addOutput('Total size: 3.2 MB');
+                    addOutput('Total links: 1,842');
+                    addOutput('Total images: 187');
+                    addOutput('Total CSS files: 12');
+                    addOutput('Total JavaScript files: 42');
+                    addOutput('');
+                    addOutput('Most common tags: div (8,543), a (5,721), span (4,532)');
+                    addOutput('Average page size: 131.2 KB');
+                }, 3000);
+            } else if (command.toLowerCase() === 'run 4' || command.toLowerCase() === 'analyze-report https://www.fh-wedel.de') {
+                addOutput('Generating HTML report for FH Wedel...');
+                setTimeout(() => {
+                    // Store report data for PDF generation
+                    reportData = {
+                        url: 'https://www.fh-wedel.de',
+                        title: 'Die Fachhochschule Wedel bei Hamburg',
+                        tags: 1583,
+                        words: 2620,
+                        size: 143103,
+                        links: 233,
+                        images: 53,
+                        css: 5,
+                        js: 30
+                    };
+                    
+                    addOutput('Report generated!');
+                    addOutput('');
+                    addOutput('=== HTML Report for https://www.fh-wedel.de ===');
+                    addOutput('Title: Die Fachhochschule Wedel bei Hamburg');
+                    addOutput('Number of tags: 1583');
+                    addOutput('Number of words: 2620');
+                    addOutput('Size in bytes: 143103');
+                    addOutput('Number of links: 233');
+                    addOutput('Number of images: 53');
+                    addOutput('Number of CSS files: 5');
+                    addOutput('Number of JavaScript files: 30');
+                    addOutput('');
+                    addOutput('Report saved as fh-wedel.de-report.html');
+                    addOutput('');
+                    addOutput('Would you like to download a PDF version? (y/n)');
+                    
+                    // Enable PDF mode to capture y/n response
+                    pdfMode = true;
+                }, 2000);
+            } else {
+                addOutput('Unknown command: ' + command);
+                addOutput('Type "run 1", "run 2", "run 3", "run 4" or enter the full command');
+            }
+        }
+        
+        // Function to simulate boot sequence
+        async function bootSequence() {
+            console.log("Boot sequence started");
+            
+            // Clear any existing content
+            while (screen.children.length > 1) {
+                screen.removeChild(screen.children[1]);
+            }
+            
+            // Add boot messages with delays
+            const bootMessages = [
+                // BIOS and hardware detection
+                "Starting 80486DX/33 BIOS v2.0...",
+                "Memory Test: 640K Base, 15360K Extended",
+                "Detecting Floppy Disk Drives...",
+                "Floppy Disk Drive A: 1.44M",
+                "Floppy Disk Drive B: 1.44M",
+                "Detecting Hard Drives...",
+                "Primary Master: Quantum Fireball 850MB",
+                "Loading MS-DOS 6.22...",
+                "",
+                // DOS drivers
+                "HIMEM.SYS loaded - High Memory Manager v3.10",
+                "EMM386.EXE loaded - Expanded Memory Manager v4.49",
+                "MOUSE.COM loaded - Microsoft Mouse Driver v9.1",
+                "",
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HTML Analyzer ASCII Frontend</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        body {
+            background-color: #000;
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            padding: 20px;
+            overflow: hidden;
+        }
+        
+        .monitor {
+            border: 2px solid #444;
+            border-radius: 10px;
+            padding: 20px;
+            background-color: #111;
+            width: 800px;
+            position: relative;
+        }
+        
+        .screen {
+            background-color: #000;
+            border: 2px solid #333;
+            border-radius: 5px;
+            padding: 15px;
+            height: 400px;
+            overflow-y: auto;
+            margin-bottom: 10px;
+            font-size: 16px;
+            position: relative;
+        }
+        
+        .output {
+            color: #0f0;
+            margin: 5px 0;
+            word-wrap: break-word;
+        }
+        
+        .scanline {
+            width: 100%;
+            height: 2px;
+            background-color: rgba(0, 255, 0, 0.1);
+            position: absolute;
+            top: 0;
+            left: 0;
+            animation: scanline 6s linear infinite;
+            pointer-events: none;
+        }
+        
+        @keyframes scanline {
+            0% { top: 0; }
+            100% { top: 100%; }
+        }
+        
+        /* Hide scrollbar */
+        .screen::-webkit-scrollbar {
+            width: 0;
+            background: transparent;
+        }
+
+        @keyframes blink {
+            0% { opacity: 1; }
+            50% { opacity: 0; }
+            100% { opacity: 1; }
+        }
+        
+        /* Hidden chart containers for PDF generation */
+        .chart-container {
+            display: none;
+            width: 400px;
+            height: 300px;
+        }
+    </style>
+</head>
+<body>
+    <div class="monitor">
+        <div class="screen" id="screen">
+            <div class="scanline"></div>
+            <div class="output">HTML Analyzer Terminal v1.0</div>
+        </div>
+    </div>
+    
+    <!-- Hidden chart containers for PDF generation -->
+    <div id="charts-container" style="display: none;">
+        <div class="chart-container">
+            <canvas id="tagsChart"></canvas>
+        </div>
+        <div class="chart-container">
+            <canvas id="filesChart"></canvas>
+        </div>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log("DOM loaded, starting boot sequence...");
+            bootSequence();
+        });
+        
+        const screen = document.getElementById('screen');
+        let pdfMode = false;
+        let reportData = null;
+        
+        // Function to add output to the screen
+        function addOutput(text) {
+            const output = document.createElement('div');
+            output.className = 'output';
+            output.textContent = text;
+            screen.appendChild(output);
+            screen.scrollTop = screen.scrollHeight;
+        }
+        
+        // Function to display scrolling names and login screen
+        async function showLoginScreen() {
+            console.log("Starting login screen...");
+            
+            // Clear any existing content
+            while (screen.children.length > 1) {
+                screen.removeChild(screen.children[1]);
+            }
+            
+            // Add lock screen header
+            addOutput('');
+            addOutput('');
+            addOutput('                HTML ANALYZER SECURITY SYSTEM');
+            addOutput('                ===========================');
+            addOutput('');
+            
+            // Create license key input
+            const licenseDiv = document.createElement('div');
+            licenseDiv.className = 'output';
+            licenseDiv.style.textAlign = 'center';
+            licenseDiv.style.marginTop = '20px';
+            licenseDiv.innerHTML = 'ENTER LICENSE KEY: <span id="license-key"></span><span class="cursor" style="display: inline-block; width: 10px; height: 16px; background-color: #0f0; animation: blink 1s infinite; vertical-align: middle;"></span>';
+            screen.appendChild(licenseDiv);
+            
+            const licenseKeySpan = document.getElementById('license-key');
+            let licenseKey = '';
+            
+            // Start scrolling names animation
+            const width = 80; // Screen width in characters
+            const names = [
+                "SVEN BOHNSTEDT - FRONTEND INTERFACE",
+                "PAUL POHL - CORE ANALYSIS ENGINE"
+            ];
+            
+            let positions = [0, -width/2]; // Start positions for each name
+            
+            // Create a line for scrolling text
+            const scrollLine = document.createElement('div');
+            scrollLine.className = 'output';
+            scrollLine.id = 'scrolling-line';
+            scrollLine.textContent = ' '.repeat(width);
+            screen.appendChild(scrollLine);
+            
+            // Animation loop with interval
+            const animationInterval = setInterval(() => {
+                // Update positions
+                positions[0] = (positions[0] + 1) % (width + names[0].length);
+                positions[1] = (positions[1] + 1) % (width + names[1].length);
+                
+                // Create the scrolling line with names at their current positions
+                let line = ' '.repeat(width);
+                
+                for (let i = 0; i < names.length; i++) {
+                    const name = names[i];
+                    const pos = Math.floor(positions[i]);
+                    
+                    // Only draw the name if it's at least partially on screen
+                    if (pos < width && pos + name.length > 0) {
+                        // Calculate visible portion of the name
+                        const startIdx = Math.max(0, -pos);
+                        const endIdx = Math.min(name.length, width - pos);
+                        const visiblePart = name.substring(startIdx, endIdx);
+                        
+                        // Calculate position in the line
+                        const linePos = Math.max(0, pos);
+                        
+                        // Insert the visible part into the line
+                        line = line.substring(0, linePos) + 
+                               visiblePart + 
+                               line.substring(linePos + visiblePart.length);
+                    }
+                }
+                
+                // Update the scrolling line
+                scrollLine.textContent = line;
+            }, 150);
+            
+            // Handle key presses for license key
+            const keyHandler = (event) => {
+                console.log("Key pressed:", event.key);
+                
+                if (event.key === 'Enter') {
+                    // Check if license key is correct
+                    if (licenseKey.toLowerCase() === 'wedel') {
+                        // Stop animation and remove key handler
+                        clearInterval(animationInterval);
+                        document.removeEventListener('keydown', keyHandler);
+                        
+                        // Show success message and start the analyzer
+                        licenseKeySpan.textContent = licenseKey + ' ✓';
+                        setTimeout(() => {
+                            startAnalyzer();
+                        }, 1000);
+                    } else {
+                        // Show error message and clear input
+                        licenseKeySpan.textContent = licenseKey + ' ✗';
+                        setTimeout(() => {
+                            licenseKey = '';
+                            licenseKeySpan.textContent = '';
+                        }, 1000);
+                    }
+                } else if (event.key === 'Backspace') {
+                    // Remove last character
+                    licenseKey = licenseKey.slice(0, -1);
+                    licenseKeySpan.textContent = licenseKey;
+                } else if (event.key.length === 1) {
+                    // Add character to license key
+                    licenseKey += event.key;
+                    licenseKeySpan.textContent = licenseKey;
+                }
+            };
+            
+            // Add key handler
+            document.addEventListener('keydown', keyHandler);
+            
+            console.log("Login screen setup completed");
+        }
+        
+        // Function to start the analyzer after successful login
+        function startAnalyzer() {
+            console.log("Starting analyzer...");
+            
+            // Clear any existing content
+            while (screen.children.length > 1) {
+                screen.removeChild(screen.children[1]);
+            }
+            
+            // Show welcome message
+            addOutput('');
+            addOutput('');
+            addOutput('                ACCESS GRANTED');
+            addOutput('                =============');
+            addOutput('');
+            addOutput('        Welcome to HTML Analyzer v1.0');
+            addOutput('');
+            
+            // Display available commands
+            addOutput('Available commands:');
+            addOutput('');
+            addOutput('1. analyze https://www.fh-wedel.de');
+            addOutput('2. analyze https://www.fh-wedel.de --modern');
+            addOutput('3. analyze https://www.fh-wedel.de --depth=2');
+            addOutput('4. analyze-report https://www.fh-wedel.de');
+            addOutput('');
+            addOutput('Type "run 1", "run 2", "run 3", "run 4" or enter the full command');
+            
+            // Create command input
+            const commandDiv = document.createElement('div');
+            commandDiv.className = 'output';
+            commandDiv.style.display = 'flex';
+            commandDiv.innerHTML = '> <span id="command-text"></span><span class="cursor" style="display: inline-block; width: 10px; height: 16px; background-color: #0f0; animation: blink 1s infinite; vertical-align: middle;"></span>';
+            screen.appendChild(commandDiv);
+            
+            const commandTextSpan = document.getElementById('command-text');
+            let commandText = '';
+            
+            // Handle key presses for commands
+            const commandHandler = (event) => {
+                console.log("Command key pressed:", event.key);
+                
+                if (pdfMode) {
+                    if (event.key === 'y' || event.key === 'Y') {
+                        generatePDF();
+                        addOutput('PDF generated and downloaded as fh-wedel.de-report.pdf');
+                        pdfMode = false;
+                    } else if (event.key === 'n' || event.key === 'N') {
+                        addOutput('PDF generation cancelled');
+                        pdfMode = false;
+                    }
+                    return;
+                }
+                
+                if (event.key === 'Enter') {
+                    // Process command
+                    processCommand(commandText);
+                    
+                    // Clear command
+                    commandText = '';
+                    commandTextSpan.textContent = '';
+                } else if (event.key === 'Backspace') {
+                    // Remove last character
+                    commandText = commandText.slice(0, -1);
+                    commandTextSpan.textContent = commandText;
+                } else if (event.key.length === 1) {
+                    // Add character to command
+                    commandText += event.key;
+                    commandTextSpan.textContent = commandText;
+                }
+            };
+            
+            // Add command handler
+            document.addEventListener('keydown', commandHandler);
+            
+            console.log("Analyzer started");
+        }
+        
+        // Function to create charts for PDF
+        function createCharts() {
+            if (!reportData) return;
+            
+            // Create tags distribution chart
+            const tagsCtx = document.getElementById('tagsChart').getContext('2d');
+            new Chart(tagsCtx, {
+                type: 'pie',
+                data: {
+                    labels: ['HTML Tags', 'Links', 'Images'],
+                    datasets: [{
+                        data: [reportData.tags, reportData.links, reportData.images],
+                        backgroundColor: [
+                            '#4e73df',
+                            '#1cc88a',
+                            '#36b9cc'
+                        ],
+                        borderColor: '#ffffff',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Element Distribution',
+                            color: '#333333',
+                            font: {
+                                size: 16
+                            }
+                        },
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+            
+            // Create files distribution chart
+            const filesCtx = document.getElementById('filesChart').getContext('2d');
+            new Chart(filesCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['CSS Files', 'JavaScript Files'],
+                    datasets: [{
+                        label: 'Number of Files',
+                        data: [reportData.css, reportData.js],
+                        backgroundColor: [
+                            '#f6c23e',
+                            '#e74a3b'
+                        ],
+                        borderColor: '#ffffff',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Resource Files',
+                            color: '#333333',
+                            font: {
+                                size: 16
+                            }
+                        },
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Function to generate enhanced PDF with tiles, charts and tables
+        async function generatePDF() {
+            if (!reportData) return;
+            
+            try {
+                // Create charts
+                createCharts();
+                
+                // Wait for charts to render
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                // Get chart canvases
+                const tagsChart = document.getElementById('tagsChart');
+                const filesChart = document.getElementById('filesChart');
+                
+                // Convert charts to images
+                const tagsChartImg = await html2canvas(tagsChart);
+                const filesChartImg = await html2canvas(filesChart);
+                
+                // Initialize jsPDF
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF({
+                    orientation: 'portrait',
+                    unit: 'mm',
+                    format: 'a4'
+                });
+                
+                // Define colors for the tiles
+                const colors = {
+                    primary: '#4e73df',
+                    success: '#1cc88a',
+                    info: '#36b9cc',
+                    warning: '#f6c23e',
+                    danger: '#e74a3b',
+                    secondary: '#858796',
+                    light: '#f8f9fc',
+                    dark: '#5a5c69'
+                };
+                
+                // Add header with logo-like element
+                doc.setFillColor(colors.dark);
+                doc.rect(0, 0, 210, 25, 'F');
+                doc.setTextColor(255, 255, 255);
+                doc.setFontSize(20);
+                doc.text('HTML ANALYZER', 105, 15, { align: 'center' });
+                
+                // Add report title
+                doc.setFillColor(colors.light);
+                doc.rect(0, 25, 210, 15, 'F');
+                doc.setTextColor(colors.dark);
+                doc.setFontSize(16);
+                doc.text('Analysis Report', 105, 35, { align: 'center' });
+                
+                // Add website info section
+                doc.setFillColor(255, 255, 255);
+                doc.rect(10, 45, 190, 20, 'F');
+                doc.setDrawColor(colors.primary);
+                doc.setLineWidth(0.5);
+                doc.rect(10, 45, 190, 20, 'S');
+                doc.setTextColor(colors.dark);
+                doc.setFontSize(12);
+                doc.text('Website:', 15, 53);
+                doc.setTextColor(colors.primary);
+                doc.text(reportData.url, 40, 53);
+                doc.setTextColor(colors.dark);
+                doc.text('Title:', 15, 60);
+                doc.setTextColor(colors.primary);
+                doc.text(reportData.title, 40, 60);
+                
+                // Add statistics tiles in a 2x3 grid layout
+                const tileWidth = 90;
+                const tileHeight = 25;
+                const tilesPerRow = 2;
+                const tileMargin = 10;
+                const startY = 70;
+                
+                // Tile data - organized in a 2x3 grid
+                const tiles = [
+                    { label: 'HTML Tags', value: reportData.tags.toLocaleString(), color: colors.primary },
+                    { label: 'Words', value: reportData.words.toLocaleString(), color: colors.success },
+                    { label: 'Links', value: reportData.links.toLocaleString(), color: colors.info },
+                    { label: 'Images', value: reportData.images.toLocaleString(), color: colors.warning },
+                    { label: 'CSS Files', value: reportData.css.toLocaleString(), color: colors.danger },
+                    { label: 'JS Files', value: reportData.js.toLocaleString(), color: colors.secondary }
+                ];
+                
+                // Draw tiles in a 2x3 grid
+                tiles.forEach((tile, index) => {
+                    const row = Math.floor(index / tilesPerRow);
+                    const col = index % tilesPerRow;
+                    const x = 10 + col * (tileWidth + tileMargin);
+                    const y = startY + row * (tileHeight + tileMargin);
+                    
+                    // Draw tile background
+                    doc.setFillColor(255, 255, 255);
+                    doc.rect(x, y, tileWidth, tileHeight, 'F');
+                    
+                    // Draw colored header
+                    doc.setFillColor(tile.color);
+                    doc.rect(x, y, tileWidth, 7, 'F');
+                    
+                    // Draw border
+                    doc.setDrawColor(tile.color);
+                    doc.setLineWidth(0.5);
+                    doc.rect(x, y, tileWidth, tileHeight, 'S');
+                    
+                    // Add label
+                    doc.setTextColor(255, 255, 255);
+                    doc.setFontSize(8);
+                    doc.text(tile.label, x + 5, y + 5);
+                    
+                    // Add value
+                    doc.setTextColor(colors.dark);
+                    doc.setFontSize(14);
+                    doc.text(tile.value, x + tileWidth / 2, y + 17, { align: 'center' });
+                });
+                
+                // Add size information in a special tile
+                const sizeY = startY + 3 * (tileHeight + tileMargin);
+                doc.setFillColor(255, 255, 255);
+                doc.rect(10, sizeY, 190, tileHeight, 'F');
+                doc.setDrawColor(colors.dark);
+                doc.setLineWidth(0.5);
+                doc.rect(10, sizeY, 190, tileHeight, 'S');
+                doc.setFillColor(colors.dark);
+                doc.rect(10, sizeY, 190, 7, 'F');
+                doc.setTextColor(255, 255, 255);
+                doc.setFontSize(8);
+                doc.text('Size Information', 15, sizeY + 5);
+                doc.setTextColor(colors.dark);
+                doc.setFontSize(12);
+                doc.text(`Total Size: ${(reportData.size / 1024).toFixed(1)} KB`, 105, sizeY + 17, { align: 'center' });
+                
+                // Add charts
+                const chartsY = sizeY + tileHeight + 15;
+                doc.addImage(tagsChartImg.toDataURL(), 'PNG', 10, chartsY, 90, 70);
+                doc.addImage(filesChartImg.toDataURL(), 'PNG', 110, chartsY, 90, 70);
+                
+                // Add table with detailed statistics
+                const tableY = chartsY + 80;
+                doc.setFillColor(colors.primary);
+                doc.rect(10, tableY, 190, 10, 'F');
+                doc.setTextColor(255, 255, 255);
+                doc.setFontSize(12);
+                doc.text('Detailed Statistics', 105, tableY + 7, { align: 'center' });
+                
+                // Table headers
+                const tableHeaders = ['Metric', 'Value', 'Percentage'];
+                const colWidths = [70, 60, 60];
+                doc.setFillColor(colors.light);
+                doc.rect(10, tableY + 10, 190, 8, 'F');
+                doc.setTextColor(colors.dark);
+                doc.setFontSize(10);
+                doc.text(tableHeaders[0], 15, tableY + 16);
+                doc.text(tableHeaders[1], 85, tableY + 16);
+                doc.text(tableHeaders[2], 145, tableY + 16);
+                
+                // Table rows
+                const tableData = [
+                    { metric: 'HTML Tags', value: reportData.tags, percentage: '100%' },
+                    { metric: 'Links', value: reportData.links, percentage: `${(reportData.links / reportData.tags * 100).toFixed(1)}%` },
+                    { metric: 'Images', value: reportData.images, percentage: `${(reportData.images / reportData.tags * 100).toFixed(1)}%` },
+                    { metric: 'CSS Files', value: reportData.css, percentage: `${(reportData.css / (reportData.css + reportData.js) * 100).toFixed(1)}%` },
+                    { metric: 'JS Files', value: reportData.js, percentage: `${(reportData.js / (reportData.css + reportData.js) * 100).toFixed(1)}%` }
+                ];
+                
+                tableData.forEach((row, index) => {
+                    const rowY = tableY + 18 + index * 8;
+                    if (index % 2 === 0) {
+                        doc.setFillColor(245, 245, 245);
+                        doc.rect(10, rowY, 190, 8, 'F');
+                    }
+                    doc.setTextColor(colors.dark);
+                    doc.setFontSize(9);
+                    doc.text(row.metric, 15, rowY + 6);
+                    doc.text(row.value.toString(), 85, rowY + 6);
+                    doc.text(row.percentage, 145, rowY + 6);
+                });
+                
+                // Add footer
+                doc.setFillColor(colors.dark);
+                doc.rect(0, 280, 210, 17, 'F');
+                doc.setTextColor(255, 255, 255);
+                doc.setFontSize(10);
+                doc.text('Generated by HTML Analyzer v1.0', 105, 287, { align: 'center' });
+                doc.setFontSize(8);
+                doc.text(`Date: ${new Date().toLocaleString()}`, 105, 293, { align: 'center' });
+                
+                // Save the PDF
+                doc.save("fh-wedel.de-report.pdf");
+            } catch (error) {
+                console.error("Error generating PDF:", error);
+                addOutput("Error generating PDF: " + error.message);
+            }
+        }
+        
+        // Function to process commands
+        function processCommand(command) {
+            console.log("Processing command:", command);
+            
+            // Add command to output
+            addOutput('> ' + command);
+            
+            // Process command
+            if (command.toLowerCase() === 'run 1' || command.toLowerCase() === 'analyze https://www.fh-wedel.de') {
+                addOutput('Analyzing FH Wedel website...');
+                setTimeout(() => {
+                    addOutput('Analysis complete!');
+                    addOutput('');
+                    addOutput('=== HTML Analysis for https://www.fh-wedel.de ===');
+                    addOutput('Title: Die Fachhochschule Wedel bei Hamburg');
+                    addOutput('Number of tags: 1583');
+                    addOutput('Number of words: 2620');
+                    addOutput('Size in bytes: 143103');
+                    addOutput('Number of links: 233');
+                    addOutput('Number of images: 53');
+                    addOutput('Number of CSS files: 5');
+                    addOutput('Number of JavaScript files: 30');
+                }, 2000);
+            } else if (command.toLowerCase() === 'run 2' || command.toLowerCase() === 'analyze https://www.fh-wedel.de --modern') {
+                addOutput('Analyzing FH Wedel website with modern dashboard...');
+                setTimeout(() => {
+                    addOutput('Analysis complete!');
+                    addOutput('');
+                    addOutput('┌─────────────────────────────────────────────────────┐');
+                    addOutput('│           DASHBOARD: FH Wedel Website               │');
+                    addOutput('│                                                     │');
+                    addOutput('├─────────────────┬─────────────────────────────────┤');
+                    addOutput('│ 🏷️ Tags: 1,583   │ 📝 Words: 2,620                 │');
+                    addOutput('├─────────────────┼─────────────────────────────────┤');
+                    addOutput('│ 🔗 Links: 233    │ 🖼️ Images: 53                   │');
+                    addOutput('├─────────────────┼─────────────────────────────────┤');
+                    addOutput('│ 🎨 CSS: 5        │ ⚙️ JS Files: 30                 │');
+                    addOutput('├─────────────────┼─────────────────────────────────┤');
+                    addOutput('│ 📦 Size: 143.1 KB│ ⏱️ Load Time: 0.76 s            │');
+                    addOutput('└─────────────────┴─────────────────────────────────┘');
+                }, 2000);
+            } else if (command.toLowerCase() === 'run 3' || command.toLowerCase() === 'analyze https://www.fh-wedel.de --depth=2') {
+                addOutput('Running deep analysis on FH Wedel website...');
+                setTimeout(() => {
+                    addOutput('Deep analysis complete!');
+                    addOutput('');
+                    addOutput('=== Deep Analysis for https://www.fh-wedel.de ===');
+                    addOutput('Recursion depth: 2');
+                    addOutput('Pages analyzed: 25');
+                    addOutput('Total tags: 32,583');
+                    addOutput('Total words: 48,750');
+                    addOutput('Total size: 3.2 MB');
+                    addOutput('Total links: 1,842');
+                    addOutput('Total images: 187');
+                    addOutput('Total CSS files: 12');
+                    addOutput('Total JavaScript files: 42');
+                    addOutput('');
+                    addOutput('Most common tags: div (8,543), a (5,721), span (4,532)');
+                    addOutput('Average page size: 131.2 KB');
+                }, 3000);
+            } else if (command.toLowerCase() === 'run 4' || command.toLowerCase() === 'analyze-report https://www.fh-wedel.de') {
+                addOutput('Generating HTML report for FH Wedel...');
+                setTimeout(() => {
+                    // Store report data for PDF generation
+                    reportData = {
+                        url: 'https://www.fh-wedel.de',
+                        title: 'Die Fachhochschule Wedel bei Hamburg',
+                        tags: 1583,
+                        words: 2620,
+                        size: 143103,
+                        links: 233,
+                        images: 53,
+                        css: 5,
+                        js: 30
+                    };
+                    
+                    addOutput('Report generated!');
+                    addOutput('');
+                    addOutput('=== HTML Report for https://www.fh-wedel.de ===');
+                    addOutput('Title: Die Fachhochschule Wedel bei Hamburg');
+                    addOutput('Number of tags: 1583');
+                    addOutput('Number of words: 2620');
+                    addOutput('Size in bytes: 143103');
+                    addOutput('Number of links: 233');
+                    addOutput('Number of images: 53');
+                    addOutput('Number of CSS files: 5');
+                    addOutput('Number of JavaScript files: 30');
+                    addOutput('');
+                    addOutput('Report saved as fh-wedel.de-report.html');
+                    addOutput('');
+                    addOutput('Would you like to download a PDF version? (y/n)');
+                    
+                    // Enable PDF mode to capture y/n response
+                    pdfMode = true;
+                }, 2000);
+            } else {
+                addOutput('Unknown command: ' + command);
+                addOutput('Type "run 1", "run 2", "run 3", "run 4" or enter the full command');
+            }
+        }
+        
+        // Function to simulate boot sequence
+        async function bootSequence() {
+            console.log("Boot sequence started");
+            
+            // Clear any existing content
+            while (screen.children.length > 1) {
+                screen.removeChild(screen.children[1]);
+            }
+            
+            // Add boot messages with delays
+            const bootMessages = [
+                // BIOS and hardware detection
+                "Starting 80486DX/33 BIOS v2.0...",
+                "Memory Test: 640K Base, 15360K Extended",
+                "Detecting Floppy Disk Drives...",
+                "Floppy Disk Drive A: 1.44M",
+                "Floppy Disk Drive B: 1.44M",
+                "Detecting Hard Drives...",
+                "Primary Master: Quantum Fireball 850MB",
+                "Loading MS-DOS 6.22...",
+                "",
+                // DOS drivers
+                "HIMEM.SYS loaded - High Memory Manager v3.10",
+                "EMM386.EXE loaded - Expanded Memory Manager v4.49",
+                "MOUSE.COM loaded - Microsoft Mouse Driver v9.1",
+                "",
+                // Linux boot sequence
+                "Booting Linux Kernel 2.6.32...",
+                "CPU: Intel(R) 80486DX/33 stepping 02",
+                "BIOS-provided physical RAM map:",
